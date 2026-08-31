@@ -597,9 +597,9 @@ function _updateUI() {
           ${hasOutputs ? `<div style="display:flex;justify-content:flex-end;margin-top:2px;">
             <span style="display:inline-flex;border:1px solid #30363d;border-radius:4px;overflow:hidden;font-size:12px;">
               <span style="padding:1px 5px;cursor:pointer;background:${showAgents ? 'transparent' : '#1f3a5f'};color:${showAgents ? '#484f58' : '#58a6ff'};"
-                onclick="agentViewCards['${g.tag}']=false;_updateUI()" title="Board">&#9823;</span>
+                onclick="toggleAgentView(this, false)" data-tag="${g.tag.replace(/"/g, '&quot;')}" title="Board">&#9823;</span>
               <span style="padding:1px 5px;cursor:pointer;background:${showAgents ? '#1f3a5f' : 'transparent'};color:${showAgents ? '#58a6ff' : '#484f58'};"
-                onclick="agentViewCards['${g.tag}']=true;_updateUI()" title="Agent log">&#9881;</span>
+                onclick="toggleAgentView(this, true)" data-tag="${g.tag.replace(/"/g, '&quot;')}" title="Agent log">&#9881;</span>
             </span>
           </div>` : ''}
         </div>
@@ -622,6 +622,11 @@ function _updateUI() {
   // Close last gen group
   if (lastGen >= 0) html += '</div>';
   grid.innerHTML = html;
+}
+
+function toggleAgentView(el, show) {
+  agentViewCards[el.dataset.tag] = show;
+  _updateUI();
 }
 
 function toggleGen(gen) {
