@@ -203,18 +203,16 @@ async def main():
         # Opus reflection (primary — reads game data)
         if all_results:
             try:
-                from chess_evolve.engine import _api_call
-                reflection = (await _api_call(
+                reflection = (await _cli_call_opus(
                     "You are a chess coach analyzing an AI's games. "
                     "Be specific about moves and positions. "
-                    "3-4 sentences. Max 200 words.",
+                    "3-4 sentences.",
                     f"Results (top 20 by score):\n{history}\n\n"
                     f"Archive: {archive.size} cells, "
                     f"best={best_score:+.0f}\n\n"
                     f"What specific chess mistakes keep recurring? "
                     f"What concrete advice would fix the biggest "
                     f"weakness?",
-                    max_tokens=300,
                 )).strip()
                 if reflection:
                     for iid, lbl in ind_labels.items():
