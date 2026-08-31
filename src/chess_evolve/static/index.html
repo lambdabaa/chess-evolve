@@ -776,7 +776,8 @@ evtSource.onmessage = (e) => {
   if (data._reload) { location.reload(); return; }
   if (!data.tag) return;
   const prev = games[data.tag];
-  if (prev && prev.node_outputs && data.node_outputs) {
+  if (prev && prev.node_outputs && data.node_outputs
+      && Object.keys(data.node_outputs).length > 0) {
     const merged = {...prev.node_outputs};
     for (const [k, v] of Object.entries(data.node_outputs)) {
       if (Array.isArray(merged[k]) && Array.isArray(v)) {

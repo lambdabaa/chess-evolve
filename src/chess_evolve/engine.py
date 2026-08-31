@@ -72,6 +72,7 @@ async def _cli_call(
             "--max-turns", "1",
             "--output-format", "text",
             "--bare",
+            "--max-tokens", str(max_tokens),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
