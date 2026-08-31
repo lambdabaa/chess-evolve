@@ -140,7 +140,10 @@ async def main():
     ind_configs: dict[str, PipelineConfig] = {seed_ind.id: seed_cfg}
     ind_prompts: dict[str, dict[str, str]] = {}
     ind_labels: dict[str, str] = {seed_ind.id: "Gen 0 (seed)"}
-    broadcast_eval_result(f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, gen=0, is_best=True, in_archive=True)
+    broadcast_eval_result(
+        f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result,
+        gen=0, is_best=True, in_archive=True,
+    )
 
     reflector = OuterLoopReflector(k=3)
     score_trajectory: list[float] = [seed_result.composite_score]

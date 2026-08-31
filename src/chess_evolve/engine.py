@@ -110,6 +110,7 @@ async def _cli_call_opus(
                 "--max-turns", "1",
                 "--output-format", "text",
                 "--bare",
+                "--allowedTools", "",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
