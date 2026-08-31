@@ -96,22 +96,48 @@ async def _api_call(
     return await _cli_call(system_prompt, user_msg, max_tokens)
 
 
-async def _cli_call_opus(system_prompt: str, user_msg: str, max_tokens: int = 500) -> str:
-    """Call Opus via claude CLI."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "claude", "-p", user_msg,
-            "--model", "opus",
-            "--append-system-prompt", system_prompt,
-            "--max-turns", "1",
-            "--output-format", "text",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60.0)
-        return stdout.decode().strip()
-    except Exception:
-        return ""
+async def _cli_call_opus(
+    system_prompt: str, user_msg: str, max_tokens: int = 500,
+) -> str:
+    """Call Opus via claude CLI with retry."""
+    import sys
+    for attempt in range(3):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "claude", "-p", user_msg,
+                "--model", "opus",
+                "--append-system-prompt", system_prompt,
+                "--max-turns", "1",
+                "--output-format", "text",
+                "--bare",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=180.0,
+            )
+            result = stdout.decode().strip()
+            if result:
+                return result
+            print(
+                f"  [OPUS] empty response (attempt {attempt+1})",
+                file=sys.stderr, flush=True,
+            )
+        except asyncio.TimeoutError:
+            print(
+                f"  [OPUS] timeout (attempt {attempt+1})",
+                file=sys.stderr, flush=True,
+            )
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        except Exception as exc:
+            print(
+                f"  [OPUS] error: {exc} (attempt {attempt+1})",
+                file=sys.stderr, flush=True,
+            )
+    return ""
 
 
 async def _sdk_invoke_agent(
