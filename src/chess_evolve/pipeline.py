@@ -204,14 +204,14 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
         id="verify_gate",
         evaluator_type="fn",
         evaluator_command=(
-            'python3 -c "'
+            "python3 -c '"
             "from pathlib import Path; "
-            "text = Path('{project_path}/.factory/chess/verification.md').read_text().lower() "
-            "if Path('{project_path}/.factory/chess/verification.md').exists() else ''; "
-            "has_issue = 'blunder' in text or "
-            "('objection' in text and 'no objection' not in text); "
-            'print("RELOOP" if has_issue else "PROCEED")'
-            '"'
+            "p = Path(\"{project_path}/.factory/chess/verification.md\"); "
+            "text = p.read_text().lower() if p.exists() else \"\"; "
+            "has_issue = \"blunder\" in text or "
+            "(\"objection\" in text and \"no objection\" not in text); "
+            "print(\"RELOOP\" if has_issue else \"PROCEED\")"
+            "'"
         ),
     )
 
@@ -285,12 +285,15 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
             id="phase_gate",
             evaluator_type="fn",
             evaluator_command=(
-                'python3 -c "'
-                "fen = open('{project_path}/.factory/chess/"
-                "board_state.md').readline().split(': ')[1].strip(); "
-                "pieces = sum(1 for c in fen.split()[0] if c.isalpha() and c.lower() != 'k'); "
-                'print("HALT" if pieces > 26 else "RELOOP" if pieces <= 10 else "PROCEED")'
-                '"'
+                "python3 -c '"
+                "fen = open(\"{project_path}/.factory/chess/"
+                "board_state.md\").readline().split(\": \")[1].strip(); "
+                "pieces = sum(1 for c in fen.split()[0] "
+                "if c.isalpha() and c.lower() != \"k\"); "
+                "print(\"HALT\" if pieces > 26 "
+                "else \"RELOOP\" if pieces <= 10 "
+                "else \"PROCEED\")"
+                "'"
             ),
         )
         analysis_step = Conditional(
