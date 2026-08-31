@@ -979,12 +979,12 @@ function updateLog() {
           const rid = `reflection-${e.gen}`;
           // If verbose, summarize via LLM on first render
           let rtext = reflection.text
-            .replace(/ \| /g, '<br>')
-            .replace(/Failures:/g, '<b style="color:#f85149;">Failures:</b>')
-            .replace(/Successes:/g, '<b style="color:#3fb950;">Successes:</b>')
-            .replace(/Suggestions:/g, '<b style="color:#d29922;">Suggestions:</b>')
-            .replace(/Prompt hint:/g, '<br><b style="color:#bc8cff;">Prompt hint:</b>')
-            .replace(/`([^`]+)`/g, '<code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#d29922;">$1</code>');
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<b style="color:#c9d1d9;font-style:normal;">$1</b>')
+            .replace(/\*(.+?)\*/g, '<i>$1</i>')
+            .replace(/`([^`]+)`/g, '<code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#d29922;">$1</code>')
+            .replace(/^[-•] (.+)$/gm, '<span style="color:#484f58;">  •</span> $1')
+            .replace(/ \| /g, '<br>');
           html += `<tr><td></td><td colspan="7" id="${rid}" style="color:#d2a8ff;font-size:11px;padding:4px 8px 10px;font-style:italic;line-height:1.6;">` +
             `${rtext}</td></tr>`;
         }
