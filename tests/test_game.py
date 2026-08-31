@@ -13,18 +13,19 @@ class TestEvalResult:
             {"eval_curve": [60, 50, -100, -350]},
             {"eval_curve": [70, 60, 50, 40, 30]},
         ]
-        # survival: game1=5, game2=4 (-350>-500), game3=5
-        assert r.composite_score == 14
+        # sum cp: game1=50+40+30-200-300=-380, game2=60+50-100-350=-340, game3=70+60+50+40+30=250
+        # all above -500, so total = -380 + -340 + 250 = -470
+        assert r.composite_score == -470
 
     def test_composite_score_with_win(self):
         r = EvalResult(wins=1, draws=0, losses=0, total_moves=20)
         r.games = [{"eval_curve": [100, 150, 200]}]
-        assert r.composite_score == 3 + 200  # 3 survival + 200 win
+        assert r.composite_score == 450 + 200_000
 
     def test_composite_score_with_draw(self):
         r = EvalResult(wins=0, draws=1, losses=0, total_moves=40)
         r.games = [{"eval_curve": [0, 10, -10, 5]}]
-        assert r.composite_score == 4 + 100  # 4 survival + 100 draw
+        assert r.composite_score == 5 + 100_000
 
     def test_blunder_count(self):
         r = EvalResult()

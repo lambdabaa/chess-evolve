@@ -299,7 +299,7 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
 <div id="log-panel"></div>
 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
   <div style="flex:2; min-width:400px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(moves above -5.0 eval + 200*win + 100*draw)</span></h2>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(sum of cp while above -500cp + 200K*win + 100K*draw)</span></h2>
     <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
@@ -533,12 +533,12 @@ function _updateUI() {
     const resultClass = g.result || 'playing';
     const ec = g.eval_curve || [];
     const avgCp = ec.length ? Math.round(ec.reduce((a,b) => a+b, 0) / ec.length) : 0;
-    let survival = 0;
+    let total = 0;
     for (const cp of ec) {
-      if (cp >= -500) survival++;
+      if (cp >= -500) total += cp;
       else break;
     }
-    const composite = survival + 200 * (g.result === 'win' ? 1 : 0) + 100 * (g.result === 'draw' ? 1 : 0);
+    const composite = total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);
     const scoreStr = ` ${composite >= 0 ? '+' : ''}${composite}`;
     const legalPct = g.node_outputs?._legal_pct || '';
     const legalStr = legalPct ? ` legal:${legalPct}%` : '';
@@ -646,12 +646,12 @@ const replayTimers = {};
 
 function computeGameScore(g) {
   const ec = g.eval_curve || [];
-  let survival = 0;
+  let total = 0;
   for (const cp of ec) {
-    if (cp >= -500) survival++;
+    if (cp >= -500) total += cp;
     else break;
   }
-  return survival + 200 * (g.result === 'win' ? 1 : 0) + 100 * (g.result === 'draw' ? 1 : 0);
+  return total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);
 }
 
 function renderMd(text) {

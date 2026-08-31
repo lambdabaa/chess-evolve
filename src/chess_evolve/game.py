@@ -96,15 +96,16 @@ class EvalResult:
 
     @property
     def composite_score(self) -> float:
-        # Count moves where eval stays above -500cp (not lost)
-        survival = 0
+        # Sum of cp scores while above -500cp (rewards survival + quality)
+        total = 0.0
         for g in self.games:
             for cp in g.get("eval_curve", []):
                 if cp >= -500:
-                    survival += 1
+                    total += cp
                 else:
                     break
-        return survival + 200 * self.wins + 100 * self.draws
+        # Draws always beat any loss, wins always beat any draw
+        return total + 200_000 * self.wins + 100_000 * self.draws
 
     def to_cycle_record(self, gen: int = 0) -> CycleRecord:
         """Build a factory CycleRecord from chess results.
