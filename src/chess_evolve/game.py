@@ -221,6 +221,7 @@ async def play_game(
     current_plan: str = ""
     all_node_outputs: dict[str, list[str]] = {}
     illegal_moves: list[str] = []
+    pipeline_moves = 0
 
     try:
         while not board.is_game_over() and move_count < MAX_MOVES:
@@ -299,8 +300,14 @@ async def play_game(
                     move = random.choice(legal)
                     move_uci = move.uci()
                     source = "random"
+                if source == "pipeline" or source == "blunder_override":
+                    pipeline_moves += 1
                 if node_outputs:
                     node_outputs["_selector_move"] = selector_said
+                    llm_moves_so_far = (move_count // 2) + 1
+                    node_outputs["_legal_pct"] = str(
+                        round(100 * pipeline_moves / llm_moves_so_far)
+                    )
                 print(
                     f"  [{game_tag}] move {move_count+1}"
                     f" played={move_uci}"
