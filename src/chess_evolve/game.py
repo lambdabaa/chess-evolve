@@ -291,10 +291,16 @@ async def play_game(
                     if node_outputs else "none"
                 )
                 import sys
-                selector_said = (
-                    node_outputs.get("selector", "?")[:20]
+                raw_sel = (
+                    node_outputs.get("selector", "?")
                     if node_outputs else "?"
                 )
+                # Extract UCI move from selector output
+                selector_said = move_uci or "?"
+                if move_uci is None and raw_sel != "?":
+                    import re as _re
+                    m = _re.search(r'\b[a-h][1-8][a-h][1-8][qrbn]?\b', raw_sel)
+                    selector_said = m.group(0) if m else raw_sel[:15]
                 if move_uci is None:
                     llm_errors += 1
                     illegal_moves.append(
