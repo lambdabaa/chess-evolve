@@ -562,10 +562,13 @@ function _updateUI() {
       <div class="game-card ${resultClass}" id="${cardId}">
         <div class="game-header">
           <span class="game-tag">${g.tag}<span class="tooltip">${formatCardTooltip(g)}</span></span>
-          <span style="display:flex;gap:6px;align-items:center;">
-            ${hasOutputs ? `<span style="font-size:9px;color:${showAgents ? '#58a6ff' : '#484f58'};cursor:pointer;border:1px solid ${showAgents ? '#58a6ff' : '#30363d'};border-radius:3px;padding:1px 5px;"
-              onclick="agentViewCards['${g.tag}']=!agentViewCards['${g.tag.replace(/'/g, "\\'")}'];_updateUI()">
-              agents</span>` : ''}
+          <span style="display:flex;gap:4px;align-items:center;">
+            ${hasOutputs ? `<span style="display:inline-flex;border:1px solid #30363d;border-radius:4px;overflow:hidden;font-size:12px;">
+              <span style="padding:1px 5px;cursor:pointer;background:${showAgents ? 'transparent' : '#1f3a5f'};color:${showAgents ? '#484f58' : '#58a6ff'};"
+                onclick="agentViewCards['${g.tag}']=false;_updateUI()" title="Board">&#9823;</span>
+              <span style="padding:1px 5px;cursor:pointer;background:${showAgents ? '#1f3a5f' : 'transparent'};color:${showAgents ? '#58a6ff' : '#484f58'};"
+                onclick="agentViewCards['${g.tag}']=true;_updateUI()" title="Agent log">&#9881;</span>
+            </span>` : ''}
             <span class="game-result ${resultClass}">${resultText}</span>
           </span>
         </div>
