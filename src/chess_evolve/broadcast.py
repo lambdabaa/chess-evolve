@@ -55,10 +55,11 @@ def broadcast_game_state(
 def broadcast_eval_result(
     label: str, cfg: PipelineConfig, result: EvalResult,
     gen: int, is_best: bool = False, in_archive: bool = False,
+    mutation_detail: dict[str, str] | None = None,
 ) -> None:
     """Append an eval result to the experiment log for the web UI."""
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
-    entry = {
+    entry: dict[str, object] = {
         "label": label,
         "gen": gen,
         "score": result.composite_score,
@@ -77,6 +78,8 @@ def broadcast_eval_result(
         "is_best": is_best,
         "in_archive": in_archive,
     }
+    if mutation_detail:
+        entry["mutation"] = mutation_detail
     log_path = LIVE_DIR / "experiment_log.jsonl"
     with open(log_path, "a") as f:
         f.write(json.dumps(entry) + "\n")

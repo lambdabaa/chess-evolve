@@ -300,12 +300,20 @@ async def main():
                         child_wf.knob_expandable.get(k, "")
                     )
             label = f"Gen {gen}.{c+1}: {desc}"
+            mutation_detail = {
+                "operator": rec.operator.value,
+                "node": rec.target_node or "",
+                "before": rec.before.get("prompt", "")
+                if rec.before else "",
+                "after": rec.after.get("prompt", "")
+                if rec.after else "",
+            }
             print(f"  {YELLOW}> {label}{RESET}")
             result = await evaluate_pipeline(
                 child_pipeline, child_cfg,
                 n_games=GAMES_PER_EVAL, eval_tag=label, gen=gen,
             )
-            return label, child_cfg, child_pipeline, result
+            return label, child_cfg, child_pipeline, result, mutation_detail
 
         # Step 3+4: Mutate, evaluate, and update archive as results arrive
         gen_candidates = []
@@ -320,7 +328,7 @@ async def main():
             entry = await coro
             if entry is None:
                 continue
-            label, cfg, pipeline, result = entry
+            label, cfg, pipeline, result, mut_detail = entry
             score = result.composite_score
             ind = Population.make_individual(
                 pipeline.compile(), generation=gen, score=score,
@@ -341,7 +349,9 @@ async def main():
             )
             broadcast_eval_result(
                 label, cfg, result, gen=gen,
-                is_best=False, in_archive=(label in inserted_labels),
+                is_best=False,
+                in_archive=(label in inserted_labels),
+                mutation_detail=mut_detail,
             )
 
         new_score = archive.best().score if archive.best() else 0

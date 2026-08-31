@@ -798,7 +798,14 @@ function updateLog() {
     const avgCp = e.avg_eval ?? 0;
     html += `<tr class="${best}" data-log-gen="${e.gen}">`;
     html += `<td></td>`;
-    html += `<td>${e.label}</td>`;
+    if (e.mutation && e.mutation.operator === 'prompt_mutate') {
+      const before = (e.mutation.before || '').substring(0, 80);
+      const after = (e.mutation.after || '').substring(0, 80);
+      const tip = `Node: ${e.mutation.node}\nBefore: ${before}...\nAfter: ${after}...`;
+      html += `<td style="cursor:help;" title="${tip.replace(/"/g, '&quot;')}">${e.label} 📝</td>`;
+    } else {
+      html += `<td>${e.label}</td>`;
+    }
     html += `<td>+${e.wins}=${e.draws}-${e.losses}</td>`;
     html += `<td class="log-score">${sc >= 0 ? '+' : ''}${Math.round(sc)}</td>`;
     html += `<td><span class="log-bar" style="width:${barW}px"></span></td>`;
