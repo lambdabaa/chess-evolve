@@ -36,7 +36,7 @@
   .game-tag .tooltip {
     display: none; position: absolute; left: 0; top: 100%;
     background: #1c2128; border: 1px solid #30363d; border-radius: 4px;
-    padding: 6px 8px; font-size: 10px; color: #c9d1d9; white-space: pre-line; max-width: 350px;
+    padding: 8px 10px; font-size: 10px; color: #c9d1d9; white-space: pre-line; max-width: 500px; max-height: 400px; overflow-y: auto;
     z-index: 10; font-weight: normal;
   }
   .game-tag:hover .tooltip { display: block; }
@@ -417,9 +417,10 @@ function formatCardTooltip(g) {
   );
   if (logEntry && logEntry.mutation.after) {
     const m = logEntry.mutation;
-    return `PROMPT MUTATION on ${m.node}\n\n`
-      + `Before:\n${m.before || ''}\n\n`
-      + `After:\n${m.after || ''}`;
+    const esc = s => (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<b style="color:#58a6ff;">PROMPT MUTATION</b> on <b>${m.node}</b><br><br>`
+      + `<span style="color:#f85149;">Before:</span><br><span style="color:#8b949e;">${esc(m.before)}</span><br><br>`
+      + `<span style="color:#3fb950;">After:</span><br><span style="color:#c9d1d9;">${esc(m.after)}</span>`;
   }
   return formatTooltip(g);
 }
