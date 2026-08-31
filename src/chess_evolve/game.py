@@ -140,13 +140,23 @@ class EvalResult:
                     order += 1
             curve_str = ",".join(f"{c:+d}" for c in curve[-10:])
             avg = sum(curve) / len(curve) if curve else 0
-            blunder_str = "; ".join(blunder_details[:3]) if blunder_details else "none"
+            blunder_str = (
+                "; ".join(blunder_details[:3])
+                if blunder_details else "none"
+            )
+            agent_out = g.get("agent_outputs", {})
+            selector_out = agent_out.get("selector", "")[:200]
+            verifier_out = agent_out.get("verifier", "")[:200]
             hypothesis = (
                 f"{g.get('tag', '')} | {result} in {len(moves)} moves | "
                 f"moves: {move_str[:200]} | "
                 f"eval: [{curve_str}] | "
                 f"blunders ({len(blunder_details)}): {blunder_str}"
             )
+            if selector_out:
+                hypothesis += f" | selector: {selector_out}"
+            if verifier_out:
+                hypothesis += f" | verifier: {verifier_out}"
             experiments.append(ExperimentRecord(
                 exp_id=i, hypothesis=hypothesis,
                 verdict="keep" if won or drew else "revert",
@@ -341,6 +351,7 @@ async def play_game(
         "termination": outcome.termination.name if outcome else "max_moves",
         "move_list": game_moves,
         "eval_curve": eval_curve,
+        "agent_outputs": dict(all_node_outputs),
     }
 
 
