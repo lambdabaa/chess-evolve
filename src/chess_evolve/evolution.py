@@ -139,6 +139,7 @@ async def main():
     archive.add(seed_ind)
     ind_configs: dict[str, PipelineConfig] = {seed_ind.id: seed_cfg}
     ind_prompts: dict[str, dict[str, str]] = {}
+    ind_labels: dict[str, str] = {seed_ind.id: "Gen 0 (seed)"}
     broadcast_eval_result(f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, gen=0, is_best=True)
 
     reflector = OuterLoopReflector(k=3)
@@ -193,6 +194,9 @@ async def main():
                     sug = '; '.join(reflection_report.mutation_suggestions[:3])
                     parts.append(f"Suggestions: {sug}")
                 reflection = " | ".join(parts)
+                # Replace hex IDs with human-readable labels
+                for iid, lbl in ind_labels.items():
+                    reflection = reflection.replace(iid[:8], lbl)
                 if reflection:
                     print(f"\n  {MAGENTA}Reflection:{RESET} {reflection}")
             except Exception as exc:
@@ -372,6 +376,7 @@ async def main():
             )
             inserted = archive.add(ind)
             ind_configs[ind.id] = cfg
+            ind_labels[ind.id] = label
             cycle_records[ind.id] = result.to_cycle_record(gen)
             if mut_detail.get("after"):
                 ind_prompts[ind.id] = {
