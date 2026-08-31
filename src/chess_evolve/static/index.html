@@ -1165,6 +1165,12 @@ function updateMutationDist() {
       const node = (e.label || '').match(/on (\w+)/)?.[1] || '?';
       parts.push(`<span style="color:#bc8cff">prompt:${node}</span>`);
     }
+    if (parts.length === 0) {
+      const mutLabel = (e.label || '').replace(/^Gen \d+\.\d+: /, '');
+      if (mutLabel && mutLabel !== e.config && e.gen > 0) {
+        parts.push(`<span style="color:${mutLabel.includes('prompt') ? '#bc8cff' : '#d29922'}">${mutLabel}</span>`);
+      }
+    }
     const displayLabel = parts.length > 0 ? parts.join(' ') : '<span style="color:#484f58">seed</span>';
     html += `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #21262d;gap:8px;">`;
     html += `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayLabel}</span>`;
