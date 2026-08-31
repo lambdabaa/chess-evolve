@@ -410,13 +410,25 @@ async def get_pipeline_move(
     move = None
     move_source = "none"
     if move_file.exists():
-        move = _extract_move(move_file.read_text(), board)
+        raw = move_file.read_text().strip()
+        move = _extract_move(raw, board)
         if move:
             move_source = "pipeline"
+        elif raw:
+            print(
+                f"  [PARSE_FAIL] move.md={raw!r}",
+                file=sys.stderr, flush=True,
+            )
     if move is None:
         fallback = workspace / ".factory" / "reviews" / "strategist-latest.md"
         if fallback.exists():
-            move = _extract_move(fallback.read_text(), board)
+            raw_fb = fallback.read_text().strip()
+            move = _extract_move(raw_fb, board)
+            if move:
+                print(
+                    f"  [PARSE_FAIL] used fallback={raw_fb!r}",
+                    file=sys.stderr, flush=True,
+                )
             if move:
                 move_source = "fallback"
 
