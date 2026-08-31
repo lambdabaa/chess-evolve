@@ -298,7 +298,7 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
     <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Mutation Distribution</h2>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Archive Population</h2>
     <div id="mutation-dist"></div>
   </div>
 </div>
@@ -1012,8 +1012,11 @@ function updateEloChart() {
 function updateMutationDist() {
   const panel = document.getElementById('mutation-dist');
   if (!panel) return;
-  const evalEntries = logEntries.filter(e => e.type !== 'reflection');
-  if (evalEntries.length === 0) { panel.innerHTML = ''; return; }
+  const archiveEntries = logEntries.filter(e => e.type !== 'reflection' && e.in_archive);
+  if (archiveEntries.length === 0) {
+    panel.innerHTML = '<div style="font-size:11px;color:#8b949e;">No archive members yet</div>';
+    return;
+  }
   const colors = {
     knob: '#d29922', remove: '#f85149', insert: '#3fb950', redirect: '#58a6ff',
     parallel: '#bc8cff', prompt: '#d2a8ff', param: '#8b949e', seed: '#484f58', other: '#484f58',
@@ -1029,33 +1032,30 @@ function updateMutationDist() {
     if (label.includes('seed')) return 'seed';
     return 'other';
   }
-  const counts = {}, scores = {}, archiveDetails = {};
-  for (const e of evalEntries) {
+  const counts = {}, scores = {}, details = {};
+  for (const e of archiveEntries) {
     const type = mutType(e.label || '');
     counts[type] = (counts[type] || 0) + 1;
     scores[type] = scores[type] || [];
     scores[type].push(e.composite ?? e.score ?? 0);
-    if (e.in_archive) {
-      if (!archiveDetails[type]) archiveDetails[type] = [];
-      const sc = Math.round(e.composite ?? e.score ?? 0);
-      archiveDetails[type].push(`${e.label?.replace(/^Gen \d+\.\d+: /, '') || '?'} (${sc >= 0 ? '+' : ''}${sc})`);
-    }
+    if (!details[type]) details[type] = [];
+    const sc = Math.round(e.composite ?? e.score ?? 0);
+    details[type].push(`${e.label?.replace(/^Gen \d+\.\d+: /, '') || '?'} (${sc >= 0 ? '+' : ''}${sc})`);
   }
-  const total = evalEntries.length;
-  let html = '<div style="font-size:11px;">';
+  const total = archiveEntries.length;
+  let html = `<div style="font-size:11px;color:#8b949e;margin-bottom:6px;">${total} cells occupied</div>`;
+  html += '<div style="font-size:11px;">';
   for (const [type, count] of Object.entries(counts).sort((a,b) => b[1]-a[1])) {
     const pct = Math.round(100 * count / total);
     const avg = scores[type] ? Math.round(scores[type].reduce((a,b)=>a+b,0) / scores[type].length) : 0;
     const best = scores[type] ? Math.round(Math.max(...scores[type])) : 0;
     const color = colors[type] || '#484f58';
-    const archiveItems = [...new Set(archiveDetails[type] || [])].sort((a,b) => {
+    const items = [...new Set(details[type] || [])].sort((a,b) => {
       const sa = parseInt(a.match(/\(([+-]?\d+)\)/)?.[1] || '0');
       const sb = parseInt(b.match(/\(([+-]?\d+)\)/)?.[1] || '0');
       return sb - sa;
     });
-    const tooltip = archiveItems.length > 0
-      ? `Archive (${archiveItems.length}):\n${archiveItems.join('\n')}`
-      : 'No archive members';
+    const tooltip = items.join('\n');
     html += `<div style="margin-bottom:4px;position:relative;cursor:pointer;" class="mut-row">`;
     html += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;">`;
     html += `<span style="color:${color};font-weight:bold;">${type}</span>`;
