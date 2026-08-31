@@ -274,10 +274,23 @@ async def play_game(
                     move_uci = None
                 pipeline_runs += 1
 
+                source = (
+                    node_outputs.get("_move_source", "none")
+                    if node_outputs else "none"
+                )
                 if move_uci is None:
                     llm_errors += 1
                     move = random.choice(legal)
                     move_uci = move.uci()
+                    source = "random"
+
+                if source != "pipeline":
+                    import sys
+                    print(
+                        f"  [{game_tag}] move {move_count+1}"
+                        f" {move_uci}: source={source}",
+                        file=sys.stderr, flush=True,
+                    )
 
                 board.push_uci(move_uci)
 

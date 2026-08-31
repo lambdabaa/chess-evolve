@@ -398,12 +398,17 @@ async def get_pipeline_move(
 
     move_file = chess_dir / "move.md"
     move = None
+    move_source = "none"
     if move_file.exists():
         move = _extract_move(move_file.read_text(), board)
+        if move:
+            move_source = "pipeline"
     if move is None:
         fallback = workspace / ".factory" / "reviews" / "strategist-latest.md"
         if fallback.exists():
             move = _extract_move(fallback.read_text(), board)
+            if move:
+                move_source = "fallback"
 
     blunder_file = chess_dir / "blunder_check.md"
     if blunder_file.exists():
@@ -413,5 +418,7 @@ async def get_pipeline_move(
         if alt_move and alt_move != move and "blunder" in blunder_text.lower():
             node_outputs["blunder_check"] += f" [OVERRIDE: {move} -> {alt_move}]"
             move = alt_move
+            move_source = "blunder_override"
 
+    node_outputs["_move_source"] = move_source
     return move, result.nodes_executed, node_outputs
