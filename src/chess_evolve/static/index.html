@@ -1137,70 +1137,47 @@ function updateEloChart() {
 function updateMutationDist() {
   const panel = document.getElementById('mutation-dist');
   if (!panel) return;
-  const archiveEntries = logEntries.filter(e => e.type !== 'reflection' && e.in_archive);
+  const archiveEntries = logEntries
+    .filter(e => e.type !== 'reflection' && e.type !== 'mutation_info' && e.in_archive)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   if (archiveEntries.length === 0) {
     panel.innerHTML = '<div style="font-size:11px;color:#8b949e;">No archive members yet</div>';
     return;
   }
-  const colors = {
-    knob: '#d29922', remove: '#f85149', insert: '#3fb950', redirect: '#58a6ff',
-    parallel: '#bc8cff', prompt: '#d2a8ff', param: '#8b949e', seed: '#484f58', other: '#484f58',
+  const seed = {
+    analysis_style: 'concise', tactical_style: 'broad',
+    positional_style: 'classical', selector_style: 'balanced',
+    verify_style: 'strict', verify_iterations: '2',
+    critique_style: 'sanity_check', opening_hint: 'theory',
+    middlegame_hint: 'safety_first', endgame_hint: 'technical',
   };
-  function mutType(label) {
-    if (label.includes('Removed')) return 'remove';
-    if (label.includes('Inserted')) return 'insert';
-    if (label.includes('Redirected')) return 'redirect';
-    if (label.includes('Parallelized')) return 'parallel';
-    if (label.includes('Changed params')) return 'param';
-    if (label.includes('Mutated prompt')) return 'prompt';
-    if (label.includes('Mutated knob') || label.includes('=')) return 'knob';
-    if (label.includes('seed')) return 'seed';
-    return 'other';
-  }
-  const counts = {}, scores = {}, details = {};
+  let html = `<div style="font-size:10px;color:#8b949e;margin-bottom:4px;">${archiveEntries.length} cells</div>`;
+  html += '<div style="font-size:10px;max-height:300px;overflow-y:auto;">';
   for (const e of archiveEntries) {
-    const type = mutType(e.label || '');
-    counts[type] = (counts[type] || 0) + 1;
-    scores[type] = scores[type] || [];
-    scores[type].push(e.composite ?? e.score ?? 0);
-    if (!details[type]) details[type] = [];
-    const sc = Math.round(e.composite ?? e.score ?? 0);
-    details[type].push(`${e.label?.replace(/^Gen \d+\.\d+: /, '') || '?'} (${sc >= 0 ? '+' : ''}${sc})`);
-  }
-  const total = archiveEntries.length;
-  let html = `<div style="font-size:11px;color:#8b949e;margin-bottom:6px;">${total} cells occupied</div>`;
-  html += '<div style="font-size:11px;">';
-  for (const [type, count] of Object.entries(counts).sort((a,b) => b[1]-a[1])) {
-    const pct = Math.round(100 * count / total);
-    const avg = scores[type] ? Math.round(scores[type].reduce((a,b)=>a+b,0) / scores[type].length) : 0;
-    const best = scores[type] ? Math.round(Math.max(...scores[type])) : 0;
-    const color = colors[type] || '#484f58';
-    const items = [...new Set(details[type] || [])].sort((a,b) => {
-      const sa = parseInt(a.match(/\(([+-]?\d+)\)/)?.[1] || '0');
-      const sb = parseInt(b.match(/\(([+-]?\d+)\)/)?.[1] || '0');
-      return sb - sa;
-    });
-    const tooltip = items.join('\n');
-    html += `<div style="margin-bottom:4px;position:relative;cursor:pointer;" class="mut-row">`;
-    html += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;">`;
-    html += `<span style="color:${color};font-weight:bold;">${type}</span>`;
-    html += `<span style="color:#8b949e;">${count} (${pct}%) avg=${avg >= 0 ? '+' : ''}${avg} best=${best >= 0 ? '+' : ''}${best}</span>`;
-    html += `</div>`;
-    html += `<div style="height:6px;background:#21262d;border-radius:3px;">`;
-    html += `<div style="height:100%;width:${pct}%;background:${color};border-radius:3px;"></div>`;
-    html += `</div>`;
-    html += `<div class="mut-tooltip" style="display:none;position:absolute;left:0;top:100%;z-index:20;background:#1c2128;border:1px solid #30363d;border-radius:4px;padding:8px;font-size:10px;color:#c9d1d9;white-space:pre-line;max-width:400px;max-height:200px;overflow-y:auto;">${tooltip}</div>`;
+    const sc = Math.round(e.score ?? 0);
+    const color = sc >= 0 ? '#3fb950' : sc > -100 ? '#d29922' : '#f85149';
+    // Find knobs that differ from seed
+    const cfg = (e.config || '').split(' ');
+    const diffs = [];
+    for (const token of cfg) {
+      const [k, v] = token.split('=');
+      if (k && v && seed[k] !== undefined && seed[k] !== v) {
+        diffs.push(`<span style="color:#d29922">${k.replace(/_/g,'').substring(0,6)}=${v}</span>`);
+      }
+    }
+    const isPrompt = (e.label || '').includes('Mutated prompt');
+    if (isPrompt) {
+      const node = (e.label || '').match(/on (\w+)/)?.[1] || '?';
+      diffs.push(`<span style="color:#bc8cff">prompt:${node}</span>`);
+    }
+    const diffStr = diffs.length > 0 ? diffs.join(' ') : '<span style="color:#484f58">seed</span>';
+    html += `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #21262d;">`;
+    html += `<span>${diffStr}</span>`;
+    html += `<span style="color:${color};font-weight:bold;min-width:40px;text-align:right;">${sc >= 0 ? '+' : ''}${sc}</span>`;
     html += `</div>`;
   }
   html += '</div>';
   panel.innerHTML = html;
-  panel.querySelectorAll('.mut-row').forEach(row => {
-    const tip = row.querySelector('.mut-tooltip');
-    if (tip) {
-      row.addEventListener('mouseenter', () => tip.style.display = 'block');
-      row.addEventListener('mouseleave', () => tip.style.display = 'none');
-    }
-  });
 }
 
 const seenLogLabels = new Set();
