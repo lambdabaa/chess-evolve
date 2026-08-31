@@ -31,12 +31,11 @@ def chess_features(cfg: PipelineConfig, wf: Workflow | None = None) -> tuple[int
     Each prompt-mutable node gets its own dimension so the best prompt
     for each node survives independently in the archive.
     """
-    knob_dims = (
-        hash(cfg.pipeline_mode) % 3,
-        hash(cfg.tactical_style) % 5,
-        hash(cfg.verify_loop_target) % 2,
-        hash(cfg.endgame_hint) % 6,
-        int(cfg.use_verification),
+    knob_dims = tuple(
+        int(hashlib.sha256(
+            str(getattr(cfg, name)).encode()
+        ).hexdigest(), 16) % 8
+        for name, _ in KNOB_SPACE
     )
     if wf is None:
         return knob_dims
