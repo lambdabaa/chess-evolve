@@ -268,7 +268,7 @@ async def play_game(
                             eval_curve=eval_curve, extra_context=extra_context,
                             accumulated_outputs=all_node_outputs,
                         ),
-                        timeout=45.0,
+                        timeout=120.0,
                     )
                 except asyncio.TimeoutError:
                     move_uci = None

@@ -388,6 +388,12 @@ async def get_pipeline_move(
     finally:
         _runner.invoke_agent = _orig_invoke  # type: ignore[assignment]
 
+    import sys
+    print(
+        f"  [EXEC] outputs={list(result.node_outputs.keys())}"
+        f" halted={result.halted}",
+        file=sys.stderr, flush=True,
+    )
     for nid, output in result.node_outputs.items():
         node = wf.nodes.get(nid)
         if node and node.writes and output:
@@ -395,6 +401,10 @@ async def get_pipeline_move(
                 fpath = workspace / wpath
                 fpath.parent.mkdir(parents=True, exist_ok=True)
                 fpath.write_text(output)
+                print(
+                    f"  [WRITE] {wpath} ({len(output)} chars)",
+                    file=sys.stderr, flush=True,
+                )
 
     move_file = chess_dir / "move.md"
     move = None
