@@ -407,6 +407,23 @@ function formatTooltip(g) {
   }).join('\n');
 }
 
+function formatCardTooltip(g) {
+  // Check if there's a log entry with prompt mutation detail
+  const tag = g.tag || '';
+  const baseTag = tag.replace(/:g\d+\([WB]\)$/, '');
+  const logEntry = logEntries.find(
+    e => e.label && e.label === baseTag && e.mutation
+      && e.mutation.operator === 'prompt_mutate'
+  );
+  if (logEntry && logEntry.mutation.after) {
+    const m = logEntry.mutation;
+    return `PROMPT MUTATION on ${m.node}\n\n`
+      + `Before:\n${(m.before || '').substring(0, 200)}\n\n`
+      + `After:\n${(m.after || '').substring(0, 200)}`;
+  }
+  return formatTooltip(g);
+}
+
 function renderNodeOutputs(outputs) {
   const labels = {
     'board_analyst': 'Analyst',
@@ -534,7 +551,7 @@ function updateUI() {
     html += `
       <div class="game-card ${resultClass}">
         <div class="game-header">
-          <span class="game-tag">${g.tag}<span class="tooltip">${formatTooltip(g)}</span></span>
+          <span class="game-tag">${g.tag}<span class="tooltip">${formatCardTooltip(g)}</span></span>
           <span class="game-result ${resultClass}">${resultText}</span>
         </div>
         <div class="player-label ${topClass}">${topLabel}</div>

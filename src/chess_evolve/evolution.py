@@ -248,23 +248,23 @@ async def main():
         if stalled and hasattr(strategy, "on_plateau"):
             strategy.on_plateau()
 
-        async def mutate_and_eval(c: int):
-            """Mutate a parent and immediately evaluate."""
+        # Step 2b: Generate candidates sequentially (prompt rewrites are sync)
+        candidates = []
+        for c in range(CANDIDATES_PER_GEN):
             parent = archive.sample_parent(
                 tournament_size=5, rank_weighted=True,
             )
             if parent is None:
-                return None
+                continue
             parent_cfg = ind_configs.get(parent.id, seed_cfg)
             parent_wf = build_pipeline(parent_cfg).compile()
 
-            mut = await asyncio.to_thread(
-                apply_random_mutation,
+            mut = apply_random_mutation(
                 parent_wf, strategy, gen,
                 reflection_report=reflection_report,
             )
             if mut is None:
-                return None
+                continue
             child_wf, rec = mut
 
             def _coerce_back(k, v):
@@ -300,34 +300,56 @@ async def main():
                         child_wf.knob_expandable.get(k, "")
                     )
             label = f"Gen {gen}.{c+1}: {desc}"
-            mutation_detail = {
+            prompt_detail: dict[str, str] = {}
+            if rec.operator.value == "prompt_mutate" and rec.target_node:
+                nid = rec.target_node
+                new_prompt = child_wf.knob_values.get(
+                    f"_prompt_{nid}", "",
+                )
+                old_node = (
+                    build_pipeline(parent_cfg).graph.nodes.get(nid)
+                )
+                old_prompt = ""
+                if old_node and hasattr(old_node, "prompt_template"):
+                    old_prompt = old_node.prompt_template or ""
+                prompt_detail = {
+                    "node": nid,
+                    "before": old_prompt,
+                    "after": str(new_prompt),
+                }
+            mut_detail = {
                 "operator": rec.operator.value,
                 "node": rec.target_node or "",
-                "before": rec.before.get("prompt", "")
-                if rec.before else "",
-                "after": rec.after.get("prompt", "")
-                if rec.after else "",
+                **prompt_detail,
             }
             print(f"  {YELLOW}> {label}{RESET}")
+            candidates.append(
+                (label, child_cfg, child_pipeline, mut_detail)
+            )
+
+        # Step 3: Evaluate all candidates in parallel
+        print(
+            f"\n  {DIM}Evaluating {len(candidates)}"
+            f" variants...{RESET}\n"
+        )
+
+        async def eval_one(label, cfg, pipeline, mut_detail):
             result = await evaluate_pipeline(
-                child_pipeline, child_cfg,
+                pipeline, cfg,
                 n_games=GAMES_PER_EVAL, eval_tag=label, gen=gen,
             )
-            return label, child_cfg, child_pipeline, result, mutation_detail
+            return label, cfg, pipeline, result, mut_detail
 
-        # Step 3+4: Mutate, evaluate, and update archive as results arrive
         gen_candidates = []
         inserted_labels: set[str] = set()
         prev_best = best_score
         gen_start = time.monotonic()
         tasks = [
-            asyncio.create_task(mutate_and_eval(c))
-            for c in range(CANDIDATES_PER_GEN)
+            asyncio.create_task(eval_one(*c))
+            for c in candidates
         ]
         for coro in asyncio.as_completed(tasks):
             entry = await coro
-            if entry is None:
-                continue
             label, cfg, pipeline, result, mut_detail = entry
             score = result.composite_score
             ind = Population.make_individual(
