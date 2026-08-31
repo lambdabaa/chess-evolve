@@ -127,8 +127,9 @@ async def _sdk_invoke_agent(
     if role == "strategist":
         system += (
             "\n\nCRITICAL: Your ENTIRE response "
-            "must be exactly one UCI move (4-5 characters like e2e4 or e7e8q). "
-            "No explanation. No punctuation. Just the move."
+            "must be exactly one UCI move. Format: source square + destination square "
+            "(4 chars like e2e4) or with promotion piece (5 chars like e7e8q). "
+            "Always include the source square. No explanation. Just the move."
         )
     reads = {
         ".factory/chess/board_state.md",
