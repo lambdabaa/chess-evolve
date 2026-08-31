@@ -651,6 +651,13 @@ function computeGameScore(g) {
   return Math.round(avg - 20 * blunders + 8 * g.move_count);
 }
 
+function renderMd(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.+?)\*/g, '<i>$1</i>')
+    .replace(/^[-•] (.+)$/gm, '  • $1');
+}
+
 function renderBestGameCard(containerId, game, label, baseline = 0) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -700,7 +707,7 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
     const boardHtml = renderBoard(currentFen, hasPerMoveFens ? currentMove : '', g.llm_white);
     const evalBarHtml = renderEvalBar(ec.slice(0, moveIdx + 1), g.llm_white);
     container.innerHTML = `
-      <div class="game-card" style="border-color:#3fb950; margin:0;">
+      <div class="game-card" style="border-color:#3fb950; margin:0; height:100%;">
         <div class="game-header">
           <span style="color:#3fb950; font-weight:bold;">${label}</span>
           <span class="game-result" style="color:#58a6ff;">Gen ${g.gen} | ${g.result.toUpperCase()} ${g.move_count}mv score:${sc >= 0?'+':''}${sc}${g.node_outputs?._legal_pct ? ` legal:${g.node_outputs._legal_pct}%` : ''}${baseline ? ` <span style="color:#3fb950;">+${Math.round(sc - baseline)} vs seed</span>` : ''}</span>
@@ -723,8 +730,8 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
             const esc = s => (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             return '<div style="font-size:9px;margin-top:6px;border-top:1px solid #30363d;padding-top:6px;">'
               + '<span style="color:#58a6ff;font-weight:bold;">PROMPT MUTATION</span> on <b>' + m.node + '</b><br>'
-              + '<span style="color:#f85149;">Before:</span> <span style="color:#8b949e;">' + esc(m.before) + '</span><br>'
-              + '<span style="color:#3fb950;">After:</span> <span style="color:#c9d1d9;">' + esc(m.after) + '</span></div>';
+              + '<span style="color:#f85149;">Before:</span> <span style="color:#8b949e;">' + renderMd(esc(m.before)) + '</span><br>'
+              + '<span style="color:#3fb950;">After:</span> <span style="color:#c9d1d9;">' + renderMd(esc(m.after)) + '</span></div>';
           }
           return '';
         })()}
@@ -754,7 +761,7 @@ function updateBestGames() {
 
   let html = `<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:16px;">`;
   html += `<h2 style="color:#58a6ff; font-size:14px; margin-bottom:12px;">Best Games</h2>`;
-  html += `<div style="display:flex; gap:16px; flex-wrap:wrap;">`;
+  html += `<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:stretch;">`;
   html += `<div id="replay-best" style="flex:1; min-width:400px;"></div>`;
   if (longest.tag !== bestScore.tag) {
     html += `<div id="replay-longest" style="flex:1; min-width:400px;"></div>`;
