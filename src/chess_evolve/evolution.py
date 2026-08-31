@@ -21,7 +21,7 @@ from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
 from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, YELLOW, header, print
 from chess_evolve.engine import _cli_call_opus
 from chess_evolve.game import EvalResult, evaluate_pipeline
-from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, _PROMPT_NODES, build_pipeline
+from chess_evolve.pipeline import _PROMPT_NODES, KNOB_SPACE, PipelineConfig, build_pipeline
 from chess_evolve.prompts import PROMPT_REGISTRY, _register_prompt
 
 
@@ -210,7 +210,8 @@ async def main():
                 if reflection_report.success_patterns:
                     parts.append(f"Successes: {'; '.join(reflection_report.success_patterns[:3])}")
                 if reflection_report.mutation_suggestions:
-                    parts.append(f"Suggestions: {'; '.join(reflection_report.mutation_suggestions[:3])}")
+                    sug = '; '.join(reflection_report.mutation_suggestions[:3])
+                    parts.append(f"Suggestions: {sug}")
                 reflection = " | ".join(parts)
                 if reflection:
                     print(f"\n  {MAGENTA}Reflection:{RESET} {reflection}")
@@ -245,10 +246,14 @@ async def main():
                             )
             if blunder_details:
                 try:
+                    coach_prompt = (
+                        "You are a chess coach. Write ONE sentence"
+                        " of advice to prevent these blunders. "
+                        "Be specific about the pattern."
+                    )
                     hint = (await _cli_call_opus(
-                        "You are a chess coach. Write ONE sentence of advice to prevent these blunders. "
-                        "Be specific about the pattern.",
-                        f"Recent blunders:\n" + "\n".join(blunder_details[:8]),
+                        coach_prompt,
+                        "Recent blunders:\n" + "\n".join(blunder_details[:8]),
                     )).strip()
                     if hint and reflection_report:
                         reflection_report.prompt_improvements.append(hint)
@@ -316,9 +321,10 @@ async def main():
         print(f"\n  {DIM}Evaluating {len(candidates)} in parallel...{RESET}\n")
 
         async def eval_one(label, cfg, pipeline, gen_num, n_games=1):
-            import asyncio as _aio
             t0 = time.monotonic()
-            result = await evaluate_pipeline(pipeline, cfg, n_games=n_games, eval_tag=label, gen=gen_num)
+            result = await evaluate_pipeline(
+                pipeline, cfg, n_games=n_games, eval_tag=label, gen=gen_num,
+            )
             return label, cfg, pipeline, result, time.monotonic() - t0
 
         import asyncio
@@ -349,7 +355,10 @@ async def main():
         new_score = archive.best().score if archive.best() else 0
         score_trajectory.append(new_score)
         if new_score > prev_best:
-            print(f"\n  {GREEN}NEW BEST: score={new_score:+.0f} (archive: {archive.size} cells){RESET}")
+            print(
+                f"\n  {GREEN}NEW BEST: score={new_score:+.0f}"
+                f" (archive: {archive.size} cells){RESET}"
+            )
 
         for label, cfg, result, score in gen_candidates:
             broadcast_eval_result(

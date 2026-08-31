@@ -8,17 +8,15 @@ from dataclasses import dataclass, field
 
 import chess
 import chess.engine
-
 from factory.cycle_analyzer import AgentStep, CycleRecord, ExperimentRecord
 from factory.workflow.package import Package
 
 from chess_evolve.broadcast import broadcast_game_state
 from chess_evolve.config import GAMES_PER_EVAL, MAX_MOVES, STOCKFISH_PATH, WORKSPACE
-from chess_evolve.display import DIM, GREEN, RED, RESET, WHITE, print
+from chess_evolve.display import DIM, RESET, WHITE, print
 from chess_evolve.engine import (
     _board_user_msg,
     _call_llm,
-    _extract_move,
     get_pipeline_move,
     setup_workspace,
 )
@@ -208,7 +206,9 @@ async def play_game(
                 opponent_context = ""
                 if cfg.use_opponent_model:
                     user_msg = _board_user_msg(board, game_moves, use_context=True)
-                    opponent_context = await _call_llm(OPPONENT_MODEL_PROMPT, user_msg, max_tokens=150)
+                    opponent_context = await _call_llm(
+                        OPPONENT_MODEL_PROMPT, user_msg, max_tokens=150,
+                    )
 
                 effective_cfg = cfg
 

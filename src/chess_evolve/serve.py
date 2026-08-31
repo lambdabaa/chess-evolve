@@ -21,7 +21,6 @@ LIVE_DIR = Path("/tmp/chess-factory/live")
 HTML_PATH = Path(__file__).parent / "static" / "index.html"
 
 
-# Serve HTML from file -- edits take effect on next browser refresh, no server restart needed
 HTML_PLACEHOLDER = """<!DOCTYPE html>
 <html>
 <head>
@@ -729,8 +728,9 @@ async def summarize_reflection(request: dict):
         return {"summary": text}
     try:
         import os
-        from anthropic import AnthropicVertex
+
         import httpx
+        from anthropic import AnthropicVertex
         client = AnthropicVertex(
             project_id=os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID", ""),
             region="us-east5",

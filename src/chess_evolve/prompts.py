@@ -123,7 +123,8 @@ MIDDLEGAME_HINTS = {
     "positional": (
         "\n\nGAME PHASE: MIDDLEGAME. Play positionally: "
         "1) Improve your worst piece every move. "
-        "2) Control key squares -- especially outposts (squares your opponent can't attack with pawns). "
+        "2) Control key squares -- especially outposts "
+        "(squares your opponent can't attack with pawns). "
         "3) Create and exploit pawn structure weaknesses (isolated, doubled, backward pawns). "
         "4) Trade bad pieces for good ones (e.g. your bad bishop for their good knight). "
         "5) Only attack when your position is ready -- accumulate small advantages first."
@@ -329,7 +330,8 @@ def _get_prompt(knob_name: str, value: str) -> str:
     if knob_name in PROMPT_REGISTRY and value in PROMPT_REGISTRY[knob_name]:
         return PROMPT_REGISTRY[knob_name][value]
     if "+" in value:
-        parts = [table.get(v, PROMPT_REGISTRY.get(knob_name, {}).get(v, "")) for v in value.split("+")]
+        reg = PROMPT_REGISTRY.get(knob_name, {})
+        parts = [table.get(v, reg.get(v, "")) for v in value.split("+")]
         combined = " ".join(p for p in parts if p)
         if combined:
             return combined

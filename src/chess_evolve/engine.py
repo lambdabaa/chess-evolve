@@ -10,18 +10,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 import chess
-
 from factory.workflow.executor import WorkflowExecutor
 from factory.workflow.package import Package
 
 from chess_evolve.broadcast import broadcast_game_state
-from chess_evolve.config import WORKSPACE
 from chess_evolve.pipeline import PipelineConfig
 from chess_evolve.prompts import (
     ENDGAME_HINTS,
     MIDDLEGAME_HINTS,
     OPENING_HINTS,
-    OPPONENT_MODEL_PROMPT,
     _get_phase_hint,
     detect_phase,
 )

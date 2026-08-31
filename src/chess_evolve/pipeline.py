@@ -210,7 +210,8 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
             "from pathlib import Path; "
             "text = Path('{project_path}/.factory/chess/verification.md').read_text().lower() "
             "if Path('{project_path}/.factory/chess/verification.md').exists() else ''; "
-            "has_issue = 'blunder' in text or ('objection' in text and 'no objection' not in text); "
+            "has_issue = 'blunder' in text or "
+            "('objection' in text and 'no objection' not in text); "
             'print("RELOOP" if has_issue else "PROCEED")'
             '"'
         ),
@@ -287,7 +288,8 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
             evaluator_type="fn",
             evaluator_command=(
                 'python3 -c "'
-                "fen = open('{project_path}/.factory/chess/board_state.md').readline().split(': ')[1].strip(); "
+                "fen = open('{project_path}/.factory/chess/"
+                "board_state.md').readline().split(': ')[1].strip(); "
                 "pieces = sum(1 for c in fen.split()[0] if c.isalpha() and c.lower() != 'k'); "
                 'print("HALT" if pieces > 26 else "RELOOP" if pieces <= 10 else "PROCEED")'
                 '"'

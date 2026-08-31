@@ -48,7 +48,8 @@ def broadcast_game_state(
     }
     (LIVE_DIR / f"{safe_name}.json").write_text(json.dumps(data))
     with open(LIVE_DIR / "recording.jsonl", "a") as f:
-        f.write(json.dumps({"t": time.monotonic(), "type": "game", "file": safe_name, **data}) + "\n")
+        rec = {"t": time.monotonic(), "type": "game", "file": safe_name, **data}
+        f.write(json.dumps(rec) + "\n")
 
 
 def broadcast_eval_result(
