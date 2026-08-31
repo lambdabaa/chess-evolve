@@ -430,17 +430,30 @@ function renderNodeOutputs(outputs) {
     'tactician': 'Tactician',
     'positionalist': 'Positionalist',
     'selector': 'Selector',
+    'verifier': 'Verifier',
   };
-  const keys = Object.keys(outputs);
-  if (keys.length === 0) return '';
-  let html = '<div class="node-outputs">';
-  for (const [nodeId, text] of Object.entries(outputs)) {
+  const colors = {
+    'board_analyst': '#58a6ff',
+    'tactician': '#f0883e',
+    'positionalist': '#3fb950',
+    'selector': '#d29922',
+    'verifier': '#bc8cff',
+  };
+  const order = ['board_analyst', 'tactician', 'positionalist', 'selector', 'verifier'];
+  const sorted = order.filter(k => k in outputs);
+  for (const k of Object.keys(outputs)) {
+    if (!sorted.includes(k)) sorted.push(k);
+  }
+  if (sorted.length === 0) return '';
+  let html = '<div style="overflow-y:auto;flex:1;min-height:0;font-size:10px;line-height:1.5;color:#c9d1d9;padding:4px 0;">';
+  for (const nodeId of sorted) {
     const label = labels[nodeId] || nodeId;
-    const escaped = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    html += `<div class="node-output">
-      <div class="node-output-label">${label}</div>
-      <div class="node-output-text">${escaped}</div>
-    </div>`;
+    const color = colors[nodeId] || '#8b949e';
+    const escaped = outputs[nodeId].replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    html += `<div style="margin-bottom:6px;">`;
+    html += `<span style="color:${color};font-weight:bold;font-size:9px;text-transform:uppercase;">${label}</span>`;
+    html += `<div style="color:#8b949e;white-space:pre-wrap;word-break:break-word;">${escaped}</div>`;
+    html += `</div>`;
   }
   html += '</div>';
   return html;
