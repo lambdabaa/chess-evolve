@@ -1018,24 +1018,28 @@ function updateMutationDist() {
     knob: '#d29922', remove: '#f85149', insert: '#3fb950', redirect: '#58a6ff',
     parallel: '#bc8cff', prompt: '#d2a8ff', param: '#8b949e', seed: '#484f58', other: '#484f58',
   };
-  const counts = {}, scores = {}, details = {};
+  function mutType(label) {
+    if (label.includes('Removed')) return 'remove';
+    if (label.includes('Inserted')) return 'insert';
+    if (label.includes('Redirected')) return 'redirect';
+    if (label.includes('Parallelized')) return 'parallel';
+    if (label.includes('Changed params')) return 'param';
+    if (label.includes('Mutated prompt')) return 'prompt';
+    if (label.includes('Mutated knob') || label.includes('=')) return 'knob';
+    if (label.includes('seed')) return 'seed';
+    return 'other';
+  }
+  const counts = {}, scores = {}, archiveDetails = {};
   for (const e of evalEntries) {
-    const l = e.label || '';
-    let type = 'other';
-    if (l.includes('Removed')) type = 'remove';
-    else if (l.includes('Inserted')) type = 'insert';
-    else if (l.includes('Redirected')) type = 'redirect';
-    else if (l.includes('Parallelized')) type = 'parallel';
-    else if (l.includes('Changed params')) type = 'param';
-    else if (l.includes('Mutated prompt')) type = 'prompt';
-    else if (l.includes('Mutated knob') || l.includes('=')) type = 'knob';
-    else if (l.includes('seed')) type = 'seed';
+    const type = mutType(e.label || '');
     counts[type] = (counts[type] || 0) + 1;
     scores[type] = scores[type] || [];
     scores[type].push(e.composite ?? e.score ?? 0);
-    if (!details[type]) details[type] = [];
-    const sc = Math.round(e.composite ?? e.score ?? 0);
-    details[type].push(`${e.label?.replace(/^Gen \d+\.\d+: /, '') || '?'} (${sc >= 0 ? '+' : ''}${sc})`);
+    if (e.in_archive) {
+      if (!archiveDetails[type]) archiveDetails[type] = [];
+      const sc = Math.round(e.composite ?? e.score ?? 0);
+      archiveDetails[type].push(`${e.label?.replace(/^Gen \d+\.\d+: /, '') || '?'} (${sc >= 0 ? '+' : ''}${sc})`);
+    }
   }
   const total = evalEntries.length;
   let html = '<div style="font-size:11px;">';
@@ -1044,12 +1048,14 @@ function updateMutationDist() {
     const avg = scores[type] ? Math.round(scores[type].reduce((a,b)=>a+b,0) / scores[type].length) : 0;
     const best = scores[type] ? Math.round(Math.max(...scores[type])) : 0;
     const color = colors[type] || '#484f58';
-    const items = [...new Set(details[type] || [])].sort((a,b) => {
+    const archiveItems = [...new Set(archiveDetails[type] || [])].sort((a,b) => {
       const sa = parseInt(a.match(/\(([+-]?\d+)\)/)?.[1] || '0');
       const sb = parseInt(b.match(/\(([+-]?\d+)\)/)?.[1] || '0');
       return sb - sa;
-    }).slice(0, 15);
-    const tooltip = items.join('\n');
+    });
+    const tooltip = archiveItems.length > 0
+      ? `Archive (${archiveItems.length}):\n${archiveItems.join('\n')}`
+      : 'No archive members';
     html += `<div style="margin-bottom:4px;position:relative;cursor:pointer;" class="mut-row">`;
     html += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;">`;
     html += `<span style="color:${color};font-weight:bold;">${type}</span>`;
