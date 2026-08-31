@@ -258,7 +258,8 @@ async def main():
             parent_cfg = ind_configs.get(parent.id, seed_cfg)
             parent_wf = build_pipeline(parent_cfg).compile()
 
-            mut = apply_random_mutation(
+            mut = await asyncio.to_thread(
+                apply_random_mutation,
                 parent_wf, strategy, gen,
                 reflection_report=reflection_report,
             )
