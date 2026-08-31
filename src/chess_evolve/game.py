@@ -301,6 +301,21 @@ async def play_game(
 
                 board.push_uci(move_uci)
 
+                broadcast_game_state(
+                    game_tag, board, game_moves + [move_uci],
+                    llm_plays_white,
+                    cfg.opponent_elo, move_count=move_count + 1,
+                    gen=gen, config=cfg.label,
+                    whose_turn="stockfish", active_node="",
+                    node_outputs={
+                        "_move_source": source,
+                        "_selector_move": selector_said,
+                        **(node_outputs or {}),
+                    },
+                    eval_curve=eval_curve,
+                    full_config=cfg.full_label,
+                )
+
                 if cfg.use_game_plan:
                     plan_input = _board_user_msg(board, game_moves, use_context=True)
                     if current_plan:
