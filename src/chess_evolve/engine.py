@@ -130,11 +130,14 @@ async def _sdk_invoke_agent(
             "must be exactly one UCI move (4-5 characters like e2e4 or e7e8q). "
             "No explanation. No punctuation. Just the move."
         )
-    reads: set[str] = set()
-    for key, node_reads in _node_reads_by_prompt.items():
-        if task.startswith(key):
-            reads = node_reads
-            break
+    reads = {
+        ".factory/chess/board_state.md",
+        ".factory/chess/analysis.md",
+        ".factory/chess/tactics.md",
+        ".factory/chess/positional.md",
+        ".factory/chess/move.md",
+        ".factory/chess/verification.md",
+    }
     if reads:
         context_parts = []
         for rpath in sorted(reads):
@@ -310,10 +313,9 @@ async def get_pipeline_move(
     node_outputs: dict[str, str] = {}
 
     _node_reads_by_prompt.clear()
-    for node in wf.nodes.values():
-        if hasattr(node, 'prompt_template') and hasattr(node, 'reads'):
-            key = node.prompt_template[:60]
-            _node_reads_by_prompt[key] = node.reads
+    for nid, node in wf.nodes.items():
+        if hasattr(node, 'prompt_template') and hasattr(node, 'reads') and node.reads:
+            _node_reads_by_prompt[nid] = node.reads
 
     _executor_holder: dict[str, WorkflowExecutor] = {}
 
