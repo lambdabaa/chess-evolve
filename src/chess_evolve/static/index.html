@@ -299,7 +299,7 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
 <div id="log-panel"></div>
 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
   <div style="flex:2; min-width:400px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(avg_cp - 20*blun + 8*moves + 500*wins + 200*draws)</span></h2>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(avg_cp - 20*blun + 8*max(mv-10,0) - 50*max(10-mv,0) + 500*W + 200*D)</span></h2>
     <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
@@ -534,7 +534,11 @@ function _updateUI() {
     const ec = g.eval_curve || [];
     const avgCp = ec.length ? Math.round(ec.reduce((a,b) => a+b, 0) / ec.length) : 0;
     const blunders = ec.filter((v,i) => i > 0 && v - ec[i-1] < -200).length;
-    const composite = avgCp - 20 * blunders + 8 * g.move_count + 500 * (g.result === 'win' ? 1 : 0) + 200 * (g.result === 'draw' ? 1 : 0);
+    const isLoss = g.result === 'loss';
+    const minMoves = 10;
+    const lengthBonus = 8 * Math.max(g.move_count - minMoves, 0);
+    const shortPenalty = isLoss ? -50 * Math.max(minMoves - g.move_count, 0) : 0;
+    const composite = avgCp - 20 * blunders + lengthBonus + shortPenalty + 500 * (g.result === 'win' ? 1 : 0) + 200 * (g.result === 'draw' ? 1 : 0);
     const scoreStr = ` ${composite >= 0 ? '+' : ''}${composite}`;
     const legalPct = g.node_outputs?._legal_pct || '';
     const legalStr = legalPct ? ` legal:${legalPct}%` : '';
