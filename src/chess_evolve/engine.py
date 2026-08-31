@@ -121,7 +121,7 @@ async def _sdk_invoke_agent(
     timeout: float = 25.0,
     **kwargs: object,
 ) -> tuple[str, int]:
-    """Drop-in for factory's invoke_agent using claude CLI."""
+    """Drop-in for factory's invoke_agent using Haiku API or CLI."""
     system = f"You are a {role}."
     if role == "strategist":
         system += (
