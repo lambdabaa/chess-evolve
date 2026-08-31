@@ -550,7 +550,7 @@ function updateUI() {
     const pipeHtml = '';
 
     const hasOutputs = g.node_outputs && Object.keys(g.node_outputs).length > 0;
-    const showAgents = agentViewCards[g.tag] ?? (!g.result && hasOutputs);
+    const showAgents = agentViewCards[g.tag] ?? false;
     const cardId = `card-${g.tag.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
     html += `
@@ -745,6 +745,10 @@ evtSource.onmessage = (e) => {
   const data = JSON.parse(e.data);
   if (data._reload) { location.reload(); return; }
   if (!data.tag) return;
+  const prev = games[data.tag];
+  if (prev && prev.node_outputs && data.node_outputs) {
+    data.node_outputs = {...prev.node_outputs, ...data.node_outputs};
+  }
   games[data.tag] = data;
   if (data.result && !finishedGames.find(g => g.tag === data.tag)) {
     finishedGames.push({...data});
