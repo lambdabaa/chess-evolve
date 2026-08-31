@@ -145,8 +145,8 @@ class EvalResult:
                 if blunder_details else "none"
             )
             agent_out = g.get("agent_outputs", {})
-            selector_out = agent_out.get("selector", "")[:200]
-            verifier_out = agent_out.get("verifier", "")[:200]
+            selector_out = agent_out.get("selector", "")
+            verifier_out = agent_out.get("verifier", "")
             hypothesis = (
                 f"{g.get('tag', '')} | {result} in {len(moves)} moves | "
                 f"moves: {move_str[:200]} | "
