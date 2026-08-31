@@ -455,7 +455,12 @@ const pipelineNodesCache = {}; // tag -> node list (accumulates during game, loc
 const collapsedGens = {};
 const agentViewCards = {};
 
-function updateUI() {
+let _uiTimer = null;
+function updateGrid() {
+  if (_uiTimer) return;
+  _uiTimer = setTimeout(() => { _uiTimer = null; _updateUI(); }, 200);
+}
+function _updateUI() {
   const sorted = Object.values(games).sort((a, b) => {
     if (a.gen !== b.gen) return a.gen - b.gen;
     return a.tag.localeCompare(b.tag);
@@ -559,7 +564,7 @@ function updateUI() {
           <span class="game-tag">${g.tag}<span class="tooltip">${formatCardTooltip(g)}</span></span>
           <span style="display:flex;gap:6px;align-items:center;">
             ${hasOutputs ? `<span style="font-size:9px;color:${showAgents ? '#58a6ff' : '#484f58'};cursor:pointer;border:1px solid ${showAgents ? '#58a6ff' : '#30363d'};border-radius:3px;padding:1px 5px;"
-              onclick="agentViewCards['${g.tag}']=!agentViewCards['${g.tag.replace(/'/g, "\\'")}'];updateGrid()">
+              onclick="agentViewCards['${g.tag}']=!agentViewCards['${g.tag.replace(/'/g, "\\'")}'];_updateUI()">
               agents</span>` : ''}
             <span class="game-result ${resultClass}">${resultText}</span>
           </span>
@@ -584,7 +589,7 @@ function updateUI() {
 
 function toggleGen(gen) {
   collapsedGens[gen] = !(collapsedGens[gen] ?? false);
-  updateUI();
+  updateGrid();
 }
 
 const logCollapsed = {};
@@ -728,7 +733,7 @@ fetch('/state').then(r => r.json()).then(state => {
       }
     }
   }
-  updateUI();
+  updateGrid();
   updateBestGames();
   for (const e of state.log) {
     const key = e.label + ':' + e.gen;
@@ -763,7 +768,7 @@ evtSource.onmessage = (e) => {
       if (!keepGens.has(games[tag].gen)) delete games[tag];
     }
   }
-  updateUI();
+  updateGrid();
   updateBestGames();
 };
 
