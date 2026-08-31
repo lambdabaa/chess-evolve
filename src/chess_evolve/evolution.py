@@ -162,11 +162,12 @@ async def main():
 
         # Step 1: Contrastive reflection
         all_sorted = sorted(all_results, key=lambda x: x[3], reverse=True)
-        history = "\n".join(
-            f"  {cfg.label}: {r.win_rate} avg={r.avg_eval:+.0f}cp blun={r.blunder_count} "
-            f"mv={r.total_moves} score={s:+.0f}"
-            for _, cfg, r, s in all_sorted[:20]
-        ) if all_results else "(seed run)"
+        history_lines = [
+            f"  {cfg.label[:60]}: {r.win_rate} avg={r.avg_eval:+.0f}cp "
+            f"blun={r.blunder_count} mv={r.total_moves} score={s:+.0f}"
+            for _, cfg, r, s in all_sorted[:15]
+        ] if all_results else ["(seed run)"]
+        history = "\n".join(history_lines)[:3000]
 
         reflection_report = None
         reflection = ""
