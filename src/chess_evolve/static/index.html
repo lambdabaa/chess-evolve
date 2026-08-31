@@ -1157,18 +1157,24 @@ function updateMutationDist() {
     const tokens = (e.config || '').split(' ');
     const diffs = tokens.filter(t => !seedTokens.has(t) && t.includes('='));
     const extras = tokens.filter(t => !t.includes('=') && t !== '');
-    const isPrompt = (e.label || '').includes('Mutated prompt');
     const parts = [];
     for (const d of diffs) parts.push(`<span style="color:#d29922">${d}</span>`);
     for (const x of extras) parts.push(`<span style="color:#d29922">${x}</span>`);
-    if (isPrompt) {
-      const node = (e.label || '').match(/on (\w+)/)?.[1] || '?';
-      parts.push(`<span style="color:#bc8cff">prompt:${node}</span>`);
-    }
-    if (parts.length === 0) {
+    // Check for prompt mutations (direct or inherited)
+    const mutNode = e.mutation?.node;
+    const isPrompt = (e.label || '').includes('Mutated prompt');
+    if (isPrompt && mutNode) {
+      parts.push(`<span style="color:#bc8cff">✎ ${mutNode}</span>`);
+    } else if (parts.length === 0 && e.gen > 0) {
+      // No knob diffs — must be a prompt variant or inherited prompt
       const mutLabel = (e.label || '').replace(/^Gen \d+\.\d+: /, '');
-      if (mutLabel && mutLabel !== e.config && e.gen > 0) {
-        parts.push(`<span style="color:${mutLabel.includes('prompt') ? '#bc8cff' : '#d29922'}">${mutLabel}</span>`);
+      if (mutLabel.includes('prompt')) {
+        const node = mutLabel.match(/on (\w+)/)?.[1] || '?';
+        parts.push(`<span style="color:#bc8cff">✎ ${node}</span>`);
+      } else if (mutLabel) {
+        parts.push(`<span style="color:#d29922">${mutLabel}</span>`);
+      } else {
+        parts.push(`<span style="color:#bc8cff">✎ inherited</span>`);
       }
     }
     const displayLabel = parts.length > 0 ? parts.join(' ') : '<span style="color:#484f58">seed</span>';
