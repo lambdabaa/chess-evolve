@@ -164,7 +164,7 @@ async def main():
         all_sorted = sorted(all_results, key=lambda x: x[3], reverse=True)
         def _fmt(label, cfg, r, s):
             return (
-                f"  {cfg.label[:60]}: {r.win_rate} "
+                f"  {cfg.label}: {r.win_rate} "
                 f"avg={r.avg_eval:+.0f}cp "
                 f"blun={r.blunder_count} mv={r.total_moves} "
                 f"score={s:+.0f}"
