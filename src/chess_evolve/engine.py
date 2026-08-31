@@ -286,6 +286,7 @@ async def get_pipeline_move(
     config_label: str = "",
     full_config_label: str = "",
     extra_context: str = "",
+    accumulated_outputs: dict[str, list[str]] | None = None,
 ) -> tuple[str | None, int, dict[str, str]]:
     """Run the Package pipeline through factory's real WorkflowExecutor."""
     user_msg = _board_user_msg(board, game_moves, use_context=cfg.use_game_context, cfg=cfg)
@@ -300,6 +301,9 @@ async def get_pipeline_move(
         f = chess_dir / name
         if f.exists():
             f.unlink()
+    fallback_path = workspace / ".factory" / "reviews" / "strategist-latest.md"
+    if fallback_path.exists():
+        fallback_path.unlink()
 
     wf = pipeline.compile()
     node_outputs: dict[str, str] = {}
@@ -341,6 +345,10 @@ async def get_pipeline_move(
                 if ex and event.node_id in ex.result.node_outputs:
                     output = ex.result.node_outputs[event.node_id]
                     node_outputs[event.node_id] = output
+                    if accumulated_outputs is not None:
+                        accumulated_outputs.setdefault(
+                            event.node_id, [],
+                        ).append(output)
                     broadcast_game_state(
                         game_tag, board, game_moves or [], llm_white,
                         stockfish_elo, move_count=move_count,
@@ -349,7 +357,11 @@ async def get_pipeline_move(
                         active_node=NODE_NAME_MAP.get(
                             event.node_id, event.node_id,
                         ),
-                        node_outputs=node_outputs,
+                        node_outputs=(
+                            accumulated_outputs
+                            if accumulated_outputs is not None
+                            else node_outputs
+                        ),
                         eval_curve=eval_curve,
                         full_config=full_config_label,
                     )

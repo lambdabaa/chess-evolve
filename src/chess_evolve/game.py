@@ -266,6 +266,7 @@ async def play_game(
                             move_count=move_count, gen=gen, config_label=cfg.label,
                             full_config_label=cfg.full_label,
                             eval_curve=eval_curve, extra_context=extra_context,
+                            accumulated_outputs=all_node_outputs,
                         ),
                         timeout=45.0,
                     )
@@ -273,9 +274,6 @@ async def play_game(
                     move_uci = None
                 pipeline_runs += 1
 
-                if node_outputs:
-                    for nid, text in node_outputs.items():
-                        all_node_outputs.setdefault(nid, []).append(text)
                 if move_uci is None:
                     llm_errors += 1
                     move = random.choice(legal)
