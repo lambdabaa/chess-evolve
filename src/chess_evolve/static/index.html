@@ -251,12 +251,10 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
   bounds=[<span style="color:#a5d6ff">"strict"</span>, <span style="color:#a5d6ff">"standard"</span>,
           <span style="color:#a5d6ff">"lenient"</span>])
 <span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"verify_iterations"</span>,
-  bounds=[1, 2, 3])
+  bounds=[0..10])
 <span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"critique_style"</span>,
   bounds=[<span style="color:#a5d6ff">"devils_advocate"</span>,
           <span style="color:#a5d6ff">"sanity_check"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"use_verification"</span>,
-  bounds=[True, False])
 <span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"opening_hint"</span>,
   bounds=[<span style="color:#a5d6ff">"theory"</span>, <span style="color:#a5d6ff">"principled"</span>])
 
@@ -576,7 +574,7 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
   const ec = g.eval_curve || [];
   const sc = computeGameScore(g);
   const defaults = {
-    pipeline_mode: 'parallel', use_verification: 'True', verify_iterations: '2',
+    pipeline_mode: 'parallel', verify_iterations: '2'',
     game_phase_routing: 'False', skip_forced: 'False', use_opponent_model: 'False',
     tactical_style: 'mate_focused', positional_style: 'dynamic',
     verify_style: 'strict', critique_style: 'sanity_check',

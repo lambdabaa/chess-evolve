@@ -36,20 +36,20 @@ class TestFactoryFeatures:
         assert compute_features(wf) == compute_features(wf)
 
     def test_fixed_length(self):
-        wf1 = build_pipeline(PipelineConfig(use_verification=True)).compile()
-        wf2 = build_pipeline(PipelineConfig(use_verification=False)).compile()
+        wf1 = build_pipeline(PipelineConfig(verify_iterations=2)).compile()
+        wf2 = build_pipeline(PipelineConfig(verify_iterations=0)).compile()
         assert len(compute_features(wf1)) == len(compute_features(wf2))
 
     def test_all_knob_combos_unique(self):
         import dataclasses
         seen = set()
         for vs in ["strict", "lenient"]:
-            for uv in [True, False]:
+            for vi in [0, 2]:
                 for oh in ["theory", "principled"]:
                     cfg = dataclasses.replace(
                         PipelineConfig(),
                         verify_style=vs,
-                        use_verification=uv,
+                        verify_iterations=vi,
                         opening_hint=oh,
                     )
                     f = compute_features(build_pipeline(cfg).compile())

@@ -29,9 +29,8 @@ from chess_evolve.prompts import (
 
 KNOB_SPACE: list[tuple[str, list]] = [
     ("verify_style", ["strict", "standard", "lenient"]),
-    ("verify_iterations", [1, 2, 3]),
+    ("verify_iterations", list(range(11))),
     ("critique_style", ["devils_advocate", "sanity_check"]),
-    ("use_verification", [True, False]),
     ("opening_hint", ["theory", "principled"]),
 ]
 
@@ -70,7 +69,6 @@ class PipelineConfig:
     use_opponent_model: bool = False
 
     # Tunable
-    use_verification: bool = True
     verify_style: str = "strict"
     critique_style: str = "sanity_check"
     opening_hint: str = "theory"
@@ -88,7 +86,7 @@ class PipelineConfig:
             parts.append(f"crit={self.critique_style}")
         if self.verify_loop_target != "selector_only":
             parts.append("reanalyze")
-        if not self.use_verification:
+        if self.verify_iterations == 0:
             parts.append("no-verify")
         elif self.verify_iterations != 2:
             parts.append(f"verify-x{self.verify_iterations}")
@@ -304,7 +302,7 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
         analysis_step = parallel_analysis
 
     selector.reads.add(".factory/chess/verification.md")
-    if cfg.use_verification:
+    if cfg.verify_iterations > 0:
         if cfg.verify_loop_target == "full_reanalysis":
             loop_body = Sequential(analysis_step, selector_pkg, verify_pkg,
                                    name="analyze-select-verify")
@@ -317,7 +315,7 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
         select_and_verify = selector_pkg
 
     analysis_in_loop = (
-        cfg.use_verification and cfg.verify_loop_target == "full_reanalysis"
+        cfg.verify_iterations > 0 and cfg.verify_loop_target == "full_reanalysis"
     )
 
     if analysis_in_loop:

@@ -13,7 +13,7 @@ class TestPipelineConfig:
         cfg = PipelineConfig()
         assert cfg.model == "haiku"
         assert cfg.pipeline_mode == "parallel"
-        assert cfg.use_verification is True
+        assert cfg.verify_iterations == 2
         assert cfg.verify_iterations == 2
 
     def test_label_includes_mode(self, default_config):
@@ -65,7 +65,7 @@ class TestBuildPipeline:
             assert nid in wf.nodes, f"Expected node '{nid}' in compiled workflow"
 
     def test_without_verification(self):
-        cfg = PipelineConfig(use_verification=False)
+        cfg = PipelineConfig(verify_iterations=0)
         pipeline = build_pipeline(cfg)
         wf = pipeline.compile()
         assert "verify_gate" not in wf.nodes
