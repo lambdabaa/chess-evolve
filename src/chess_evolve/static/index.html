@@ -1144,36 +1144,19 @@ function updateMutationDist() {
     panel.innerHTML = '<div style="font-size:11px;color:#8b949e;">No archive members yet</div>';
     return;
   }
-  const seed = {
-    analysis_style: 'concise', tactical_style: 'broad',
-    positional_style: 'classical', selector_style: 'balanced',
-    verify_style: 'strict', verify_iterations: '2',
-    critique_style: 'sanity_check', opening_hint: 'theory',
-    middlegame_hint: 'safety_first', endgame_hint: 'technical',
-  };
   let html = `<div style="font-size:10px;color:#8b949e;margin-bottom:4px;">${archiveEntries.length} cells</div>`;
   html += '<div style="font-size:10px;max-height:300px;overflow-y:auto;">';
   for (const e of archiveEntries) {
     const sc = Math.round(e.score ?? 0);
     const color = sc >= 0 ? '#3fb950' : sc > -100 ? '#d29922' : '#f85149';
-    // Find knobs that differ from seed
-    const cfg = (e.config || '').split(' ');
-    const diffs = [];
-    for (const token of cfg) {
-      const [k, v] = token.split('=');
-      if (k && v && seed[k] !== undefined && seed[k] !== v) {
-        diffs.push(`<span style="color:#d29922">${k.replace(/_/g,'').substring(0,6)}=${v}</span>`);
-      }
-    }
-    const isPrompt = (e.label || '').includes('Mutated prompt');
-    if (isPrompt) {
-      const node = (e.label || '').match(/on (\w+)/)?.[1] || '?';
-      diffs.push(`<span style="color:#bc8cff">prompt:${node}</span>`);
-    }
-    const diffStr = diffs.length > 0 ? diffs.join(' ') : '<span style="color:#484f58">seed</span>';
-    html += `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #21262d;">`;
-    html += `<span>${diffStr}</span>`;
-    html += `<span style="color:${color};font-weight:bold;min-width:40px;text-align:right;">${sc >= 0 ? '+' : ''}${sc}</span>`;
+    // Show the mutation that created this individual
+    const label = (e.label || '').replace(/^Gen \d+\.\d+: /, '');
+    const isPrompt = label.includes('Mutated prompt');
+    const labelColor = isPrompt ? '#bc8cff' : '#d29922';
+    const displayLabel = label || 'seed';
+    html += `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #21262d;gap:8px;">`;
+    html += `<span style="color:${labelColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayLabel}</span>`;
+    html += `<span style="color:${color};font-weight:bold;min-width:40px;text-align:right;flex-shrink:0;">${sc >= 0 ? '+' : ''}${sc}</span>`;
     html += `</div>`;
   }
   html += '</div>';
