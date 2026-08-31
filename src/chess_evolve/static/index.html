@@ -292,14 +292,10 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
 
 <div id="best-games-panel"></div>
 <div id="log-panel"></div>
-<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:16px;">
-  <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(avg_cp - 20*blun + 8*moves + 500*wins + 200*draws)</span></h2>
-  <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
-</div>
 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
   <div style="flex:2; min-width:400px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Game Length by Generation</h2>
-    <canvas id="length-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(avg_cp - 20*blun + 8*moves + 500*wins + 200*draws)</span></h2>
+    <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
     <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Mutation Distribution</h2>
@@ -555,7 +551,7 @@ const logCollapsed = {};
 function toggleLogGen(gen) {
   const isOpen = (gen in logCollapsed) ? !logCollapsed[gen] : false;
   logCollapsed[gen] = !isOpen;
-  updateLog(); updateEloChart(); updateLengthChart(); updateMutationDist();
+  updateLog(); updateEloChart(); updateMutationDist();
 }
 
 // Best games panel
@@ -701,7 +697,7 @@ fetch('/state').then(r => r.json()).then(state => {
       logEntries.push(e);
     }
   }
-  updateLog(); updateEloChart(); updateLengthChart(); updateMutationDist();
+  updateLog(); updateEloChart(); updateMutationDist();
 });
 
 const evtSource = new EventSource('/events');
@@ -861,7 +857,7 @@ function updateLog() {
               body: JSON.stringify({text: reflection.text}),
             }).then(r => r.json()).then(d => {
               reflection.text = d.summary;
-              updateLog(); updateEloChart(); updateLengthChart(); updateMutationDist();
+              updateLog(); updateEloChart(); updateMutationDist();
             }).catch(() => {});
           }
           html += `<tr><td></td><td colspan="7" id="${rid}" style="color:#d2a8ff;font-size:11px;padding:4px 8px 10px;font-style:italic;line-height:1.5;">` +
@@ -1012,78 +1008,6 @@ function updateEloChart() {
   ctx.fillText('-- trend', W - 40, 14);
 }
 
-function updateLengthChart() {
-  const canvas = document.getElementById('length-chart');
-  if (!canvas) return;
-  const chartEntries = logEntries.filter(e => e.type !== 'reflection' && e.moves != null);
-  if (chartEntries.length === 0) return;
-  const ctx = canvas.getContext('2d');
-  const rect = canvas.getBoundingClientRect();
-  const W = rect.width || 900;
-  const H = rect.height || 180;
-  canvas.width = W * 2; canvas.height = H * 2; ctx.scale(2, 2);
-  const pad = {top: 20, right: 20, bottom: 30, left: 40};
-  const plotW = W - pad.left - pad.right;
-  const plotH = H - pad.top - pad.bottom;
-
-  const gens = [...new Set(chartEntries.map(e => e.gen))].sort((a,b) => a - b);
-  const getMoves = e => e.moves ?? 0;
-  const bestPerGen = gens.map(g => Math.max(...chartEntries.filter(e => e.gen === g).map(getMoves)));
-  const runningBest = []; let cumMax = 0;
-  for (const v of bestPerGen) { cumMax = Math.max(cumMax, v); runningBest.push(cumMax); }
-
-  const maxMv = Math.max(...chartEntries.map(getMoves)) + 2;
-  const minMv = 0;
-  const mvRange = Math.max(maxMv, 1);
-
-  function x(i) { return pad.left + (i / Math.max(gens.length - 1, 1)) * plotW; }
-  function y(mv) { return pad.top + plotH - ((mv - minMv) / mvRange) * plotH; }
-
-  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
-  for (let mv = 0; mv <= maxMv; mv += 5) {
-    ctx.beginPath(); ctx.moveTo(pad.left, y(mv)); ctx.lineTo(W - pad.right, y(mv)); ctx.stroke();
-    ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
-    ctx.fillText(mv.toString(), pad.left - 6, y(mv) + 3);
-  }
-  ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-  const labelStep = Math.max(1, Math.ceil(gens.length / 20));
-  for (let i = 0; i < gens.length; i += labelStep) ctx.fillText(`${gens[i]}`, x(i), H - 8);
-
-  // Dots
-  for (const e of chartEntries) {
-    const gi = gens.indexOf(e.gen);
-    ctx.beginPath(); ctx.arc(x(gi), y(getMoves(e)), 2, 0, Math.PI * 2);
-    ctx.fillStyle = getMoves(e) >= 30 ? '#3fb950' : '#484f58'; ctx.fill();
-  }
-  // Best-per-gen line
-  ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 2; ctx.beginPath();
-  for (let i = 0; i < gens.length; i++) {
-    if (i === 0) ctx.moveTo(x(i), y(bestPerGen[i])); else ctx.lineTo(x(i), y(bestPerGen[i]));
-  }
-  ctx.stroke();
-  // Running best
-  ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.beginPath();
-  for (let i = 0; i < gens.length; i++) {
-    if (i === 0) ctx.moveTo(x(i), y(runningBest[i])); else ctx.lineTo(x(i), y(runningBest[i]));
-  }
-  ctx.stroke(); ctx.setLineDash([]);
-  // Trendline
-  if (gens.length >= 3) {
-    const n = bestPerGen.length;
-    let sx=0,sy=0,sxx=0,sxy=0;
-    for (let i=0;i<n;i++){sx+=i;sy+=bestPerGen[i];sxx+=i*i;sxy+=i*bestPerGen[i];}
-    const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx), intercept=(sy-slope*sx)/n;
-    ctx.strokeStyle='#d29922';ctx.lineWidth=1.5;ctx.setLineDash([6,3]);ctx.beginPath();
-    ctx.moveTo(x(0),y(intercept));ctx.lineTo(x(n-1),y(slope*(n-1)+intercept));
-    ctx.stroke();ctx.setLineDash([]);
-  }
-  // Legend
-  ctx.font = '10px monospace'; ctx.textAlign = 'right';
-  ctx.fillStyle = '#58a6ff'; ctx.fillText('● best in gen', W - pad.right, pad.top);
-  ctx.fillStyle = '#3fb950'; ctx.fillText('— running best', W - pad.right, pad.top + 14);
-  ctx.fillStyle = '#d29922'; ctx.fillText('-- trend', W - pad.right, pad.top + 28);
-}
 
 function updateMutationDist() {
   const panel = document.getElementById('mutation-dist');
@@ -1120,7 +1044,7 @@ function updateMutationDist() {
     const avg = scores[type] ? Math.round(scores[type].reduce((a,b)=>a+b,0) / scores[type].length) : 0;
     const best = scores[type] ? Math.round(Math.max(...scores[type])) : 0;
     const color = colors[type] || '#484f58';
-    const items = (details[type] || []).sort((a,b) => {
+    const items = [...new Set(details[type] || [])].sort((a,b) => {
       const sa = parseInt(a.match(/\(([+-]?\d+)\)/)?.[1] || '0');
       const sb = parseInt(b.match(/\(([+-]?\d+)\)/)?.[1] || '0');
       return sb - sa;
@@ -1156,7 +1080,7 @@ logSource.onmessage = (e) => {
   if (!seenLogLabels.has(key)) {
     seenLogLabels.add(key);
     logEntries.push(entry);
-    updateLog(); updateEloChart(); updateLengthChart(); updateMutationDist();
+    updateLog(); updateEloChart(); updateMutationDist();
   }
 };
 logSource.onerror = () => {

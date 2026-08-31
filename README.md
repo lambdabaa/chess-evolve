@@ -2,6 +2,8 @@
 
 Teach an LLM to play chess via evolutionary prompt optimization, powered by [remote-factory](https://github.com/akashgit/remote-factory).
 
+![Live dashboard showing score trends, mutation distribution, and parallel games](docs/screenshot.png)
+
 Each chess move runs a composed `Package` pipeline through factory's `WorkflowExecutor`:
 
 ```
