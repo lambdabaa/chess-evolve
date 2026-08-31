@@ -453,6 +453,7 @@ const pipelineNodesCache = {}; // tag -> node list (accumulates during game, loc
 
 // Track which gens user has manually toggled
 const collapsedGens = {};
+const agentViewCards = {};
 
 function updateUI() {
   const sorted = Object.values(games).sort((a, b) => {
@@ -548,29 +549,32 @@ function updateUI() {
     const nodes = cached && cached.length > 0 ? cached : ['...'];
     const pipeHtml = '';
 
+    const hasOutputs = g.node_outputs && Object.keys(g.node_outputs).length > 0;
+    const showAgents = agentViewCards[g.tag] ?? (!g.result && hasOutputs);
+    const cardId = `card-${g.tag.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
     html += `
-      <div class="game-card ${resultClass}">
+      <div class="game-card ${resultClass}" id="${cardId}">
         <div class="game-header">
           <span class="game-tag">${g.tag}<span class="tooltip">${formatCardTooltip(g)}</span></span>
-          <span class="game-result ${resultClass}">${resultText}</span>
+          <span style="display:flex;gap:6px;align-items:center;">
+            ${hasOutputs ? `<span style="font-size:9px;color:${showAgents ? '#58a6ff' : '#484f58'};cursor:pointer;border:1px solid ${showAgents ? '#58a6ff' : '#30363d'};border-radius:3px;padding:1px 5px;"
+              onclick="agentViewCards['${g.tag}']=!agentViewCards['${g.tag.replace(/'/g, "\\'")}'];updateGrid()">
+              agents</span>` : ''}
+            <span class="game-result ${resultClass}">${resultText}</span>
+          </span>
         </div>
-        <div class="player-label ${topClass}">${topLabel}</div>
-        <div style="display:flex; gap:4px; flex-shrink:0; overflow:hidden;">
-          ${renderEvalBar(g.eval_curve || [], g.llm_white)}
-          <div class="board">${renderBoard(g.fen, lastMove, g.llm_white)}</div>
-        </div>
-        <div class="player-label ${botClass}">${botLabel}</div>
-        ${turnHtml}
-        ${pipeHtml}
-        <div class="moves">${formatMoves(g.moves)}</div>
-        ${g.node_outputs && Object.keys(g.node_outputs).length > 0
-          ? `<div style="margin-top:4px;">
-              <span style="font-size:9px;color:#58a6ff;cursor:pointer;"
-                onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▸ agent outputs':'▾ agent outputs'">
-                ${g.result ? '▸ agent outputs' : '▾ agent outputs'}</span>
-              <div style="display:${g.result ? 'none' : 'block'};">${renderNodeOutputs(g.node_outputs)}</div>
-            </div>`
-          : ''}
+        ${showAgents
+          ? renderNodeOutputs(g.node_outputs)
+          : `<div class="player-label ${topClass}">${topLabel}</div>
+            <div style="display:flex; gap:4px; flex-shrink:0; overflow:hidden;">
+              ${renderEvalBar(g.eval_curve || [], g.llm_white)}
+              <div class="board">${renderBoard(g.fen, lastMove, g.llm_white)}</div>
+            </div>
+            <div class="player-label ${botClass}">${botLabel}</div>
+            ${turnHtml}
+            ${pipeHtml}
+            <div class="moves">${formatMoves(g.moves)}</div>`}
       </div>`;
   }
   // Close last gen group
