@@ -703,7 +703,7 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
       <div class="game-card" style="border-color:#3fb950; margin:0;">
         <div class="game-header">
           <span style="color:#3fb950; font-weight:bold;">${label}</span>
-          <span class="game-result" style="color:#58a6ff;">Gen ${g.gen} | ${g.result.toUpperCase()} ${g.move_count}mv score:${sc >= 0?'+':''}${sc} legal:${g.pipeline_runs ? Math.round(100*(g.pipeline_runs - (g.llm_errors||0))/g.pipeline_runs) : '?'}%${baseline ? ` <span style="color:#3fb950;">+${Math.round(sc - baseline)} vs seed</span>` : ''}</span>
+          <span class="game-result" style="color:#58a6ff;">Gen ${g.gen} | ${g.result.toUpperCase()} ${g.move_count}mv score:${sc >= 0?'+':''}${sc}${g.node_outputs?._legal_pct ? ` legal:${g.node_outputs._legal_pct}%` : ''}${baseline ? ` <span style="color:#3fb950;">+${Math.round(sc - baseline)} vs seed</span>` : ''}</span>
         </div>
         <div class="player-label">${topLabel}</div>
         <div style="display:flex; gap:4px; flex-shrink:0;">
@@ -714,6 +714,20 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
         <div style="font-size:10px;color:#8b949e;margin:4px 0;">Move ${moveIdx + 1}/${(g.moves||[]).length} eval=${evalAtMove >= 0?'+':''}${evalAtMove}cp</div>
         <div class="moves">${formatMoves(progress)}</div>
         <div style="font-size:9px;color:#8b949e;margin-top:6px;white-space:pre-line;">${config}</div>
+        ${(() => {
+          const baseTag = g.tag.replace(/:g\d+\([WB]\)$/, '');
+          const mutEntry = logEntries.find(e => e.mutation && e.mutation.operator === 'prompt_mutate'
+            && e.label && (e.label === baseTag || e.label === baseTag + ':mut'));
+          if (mutEntry && mutEntry.mutation.after) {
+            const m = mutEntry.mutation;
+            const esc = s => (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<div style="font-size:9px;margin-top:6px;border-top:1px solid #30363d;padding-top:6px;">'
+              + '<span style="color:#58a6ff;font-weight:bold;">PROMPT MUTATION</span> on <b>' + m.node + '</b><br>'
+              + '<span style="color:#f85149;">Before:</span> <span style="color:#8b949e;">' + esc(m.before).substring(0, 150) + '...</span><br>'
+              + '<span style="color:#3fb950;">After:</span> <span style="color:#c9d1d9;">' + esc(m.after).substring(0, 150) + '...</span></div>';
+          }
+          return '';
+        })()}
         ${g.reflection ? `<div style="font-size:10px;color:#d2a8ff;margin-top:8px;font-style:italic;line-height:1.4;border-top:1px solid #30363d;padding-top:6px;">💭 ${g.reflection.replace(/\*\*(.+?)\*\*/g, '<b style="color:#c9d1d9;font-style:normal;">$1</b>').replace(/`([^`]+)`/g, '<code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#d29922;">$1</code>')}</div>` : ''}
       </div>`;
     moveIdx++;
