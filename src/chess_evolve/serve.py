@@ -665,7 +665,27 @@ async def full_state():
             best_games = _json.loads(best_path.read_text())
         except Exception:
             pass
-    return {"games": game_states, "log": log_entries, "best_games": best_games}
+    archive = None
+    archive_path = LIVE_DIR / "_archive.json"
+    if archive_path.exists():
+        try:
+            archive = _json.loads(archive_path.read_text())
+        except Exception:
+            pass
+    return {"games": game_states, "log": log_entries, "best_games": best_games, "archive": archive}
+
+
+@app.get("/archive")
+async def get_archive():
+    """Return the current MAP-Elites archive population."""
+    import json as _json
+    archive_path = LIVE_DIR / "_archive.json"
+    if archive_path.exists():
+        try:
+            return _json.loads(archive_path.read_text())
+        except Exception:
+            return []
+    return []
 
 
 @app.get("/events")

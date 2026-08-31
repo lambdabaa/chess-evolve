@@ -16,7 +16,7 @@ from factory.outer_loop.population import MAPElitesArchive, Population
 from factory.outer_loop.reflector import OuterLoopReflector
 from factory.workflow.primitives import Workflow
 
-from chess_evolve.broadcast import broadcast_eval_result
+from chess_evolve.broadcast import broadcast_archive, broadcast_eval_result
 from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
 from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, YELLOW, header, print
 from chess_evolve.engine import _cli_call_opus
@@ -329,6 +329,7 @@ async def main():
 
         # Step 4: Update archive
         gen_candidates = []
+        inserted_labels: set[str] = set()
         prev_best = best_score
         for label, cfg, pipeline, result, elapsed in eval_results:
             score = result.composite_score
@@ -338,6 +339,8 @@ async def main():
             ind_configs[ind.id] = cfg
             cycle_records[ind.id] = result.to_cycle_record(gen)
             gen_candidates.append((label, cfg, result, score))
+            if inserted:
+                inserted_labels.add(label)
             marker = f" {GREEN}-> archive{RESET}" if inserted else ""
             print(f"  {WHITE}{label}:{RESET} {result.win_rate} score={score:+.0f} "
                   f"(avg={result.avg_eval:+.0f}cp blun={result.blunder_count} "
@@ -352,7 +355,17 @@ async def main():
             broadcast_eval_result(
                 label, cfg, result, gen=gen,
                 is_best=(score == new_score and new_score > prev_best),
+                in_archive=(label in inserted_labels),
             )
+
+        # Broadcast current archive population
+        archive_entries = [
+            {"id": ind.id[:8], "score": ind.score, "gen": ind.generation,
+             "config": ind_configs.get(ind.id, seed_cfg).label,
+             "features": list(ind.features)}
+            for ind in archive.all_individuals()
+        ]
+        broadcast_archive(archive_entries)
         if reflection:
             entry = {"type": "reflection", "gen": gen, "text": reflection}
             with open(LIVE_DIR / "experiment_log.jsonl", "a") as f:

@@ -81,3 +81,11 @@ def broadcast_eval_result(
         f.write(json.dumps(entry) + "\n")
     with open(LIVE_DIR / "recording.jsonl", "a") as f:
         f.write(json.dumps({"t": time.monotonic(), "type": "eval", **entry}) + "\n")
+
+
+def broadcast_archive(
+    archive_entries: list[dict[str, object]],
+) -> None:
+    """Write the current archive population to a JSON file for the UI."""
+    LIVE_DIR.mkdir(parents=True, exist_ok=True)
+    (LIVE_DIR / "_archive.json").write_text(json.dumps(archive_entries, indent=2))
