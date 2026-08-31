@@ -476,6 +476,7 @@ const pipelineNodesCache = {}; // tag -> node list (accumulates during game, loc
 // Track which gens user has manually toggled
 const collapsedGens = {};
 const agentViewCards = {};
+const _seenOutputs = {};
 
 let _uiTimer = null;
 function updateGrid() {
@@ -576,7 +577,9 @@ function _updateUI() {
     const nodes = cached && cached.length > 0 ? cached : ['...'];
     const pipeHtml = '';
 
-    const hasOutputs = g.node_outputs && Object.keys(g.node_outputs).length > 0;
+    const hasOutputsNow = g.node_outputs && Object.keys(g.node_outputs).length > 0;
+    if (hasOutputsNow) _seenOutputs[g.tag] = true;
+    const hasOutputs = _seenOutputs[g.tag] || false;
     const showAgents = agentViewCards[g.tag] ?? false;
     const cardId = `card-${g.tag.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
