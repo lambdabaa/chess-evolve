@@ -1009,8 +1009,12 @@ function updateEloChart() {
   const plotH = H - pad.top - pad.bottom;
 
   // Compute best avg eval per generation
-  const chartEntries = logEntries.filter(e => e.type !== 'reflection');
-  const gens = [...new Set(chartEntries.map(e => e.gen))].sort((a, b) => a - b);
+  const chartEntries = logEntries.filter(e => e.type !== 'reflection' && e.type !== 'mutation_info');
+  const allGens = [...new Set(chartEntries.map(e => e.gen))].sort((a, b) => a - b);
+  // Exclude incomplete last gen (fewer entries than previous)
+  const genCounts = allGens.map(g => chartEntries.filter(e => e.gen === g).length);
+  const expectedCount = allGens.length > 1 ? Math.max(...genCounts.slice(0, -1)) : genCounts[0] || 5;
+  const gens = genCounts[genCounts.length - 1] < expectedCount ? allGens.slice(0, -1) : allGens;
   // Cap at 100K for chart — wins (200K) and draws (100K) would squish the loss range
   const getCp = e => Math.min(e.composite ?? e.score ?? 0, 99999);
   const bestPerGen = gens.map(g => {
