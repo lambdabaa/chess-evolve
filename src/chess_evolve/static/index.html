@@ -850,18 +850,15 @@ function updateLog() {
         if (reflection) {
           const rid = `reflection-${e.gen}`;
           // If verbose, summarize via LLM on first render
-          if (reflection.text.includes('Failures:') && !reflection._summarized) {
-            reflection._summarized = true;
-            fetch('/summarize-reflection', {
-              method: 'POST', headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({text: reflection.text}),
-            }).then(r => r.json()).then(d => {
-              reflection.text = d.summary;
-              updateLog(); updateEloChart(); updateMutationDist();
-            }).catch(() => {});
-          }
-          html += `<tr><td></td><td colspan="7" id="${rid}" style="color:#d2a8ff;font-size:11px;padding:4px 8px 10px;font-style:italic;line-height:1.5;">` +
-            `💭 ${reflection.text.replace(/\*\*(.+?)\*\*/g, '<b style="color:#c9d1d9;">$1</b>').replace(/`([^`]+)`/g, '<code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#d29922;">$1</code>')}</td></tr>`;
+          let rtext = reflection.text
+            .replace(/ \| /g, '<br>')
+            .replace(/Failures:/g, '<b style="color:#f85149;">Failures:</b>')
+            .replace(/Successes:/g, '<b style="color:#3fb950;">Successes:</b>')
+            .replace(/Suggestions:/g, '<b style="color:#d29922;">Suggestions:</b>')
+            .replace(/Prompt hint:/g, '<br><b style="color:#bc8cff;">Prompt hint:</b>')
+            .replace(/`([^`]+)`/g, '<code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#d29922;">$1</code>');
+          html += `<tr><td></td><td colspan="7" id="${rid}" style="color:#d2a8ff;font-size:11px;padding:4px 8px 10px;font-style:italic;line-height:1.6;">` +
+            `${rtext}</td></tr>`;
         }
       }
     }
