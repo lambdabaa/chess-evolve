@@ -77,7 +77,7 @@ for gen in range(N):
 ```
 Your version: same loop, just change `evaluate()` to score your domain.
 
-**[`evolution.py`](src/chess_evolve/evolution.py)** also defines `chess_features()` for MAP-Elites diversity. Each feature dimension you care about gets a slot in the tuple so that diverse strategies survive in the archive. Your version: define features that capture meaningful variation in your domain.
+Factory's `compute_features()` automatically extracts MAP-Elites feature dimensions from the compiled workflow (knob values, prompt content, edge structure, params). No custom feature function needed.
 
 ### Domain-specific code (replace these)
 
@@ -101,6 +101,20 @@ Your version: same loop, just change `evaluate()` to score your domain.
 | `CycleRecord` | Structured experiment data for reflection |
 | `default_prompt_rewriter` | Opus-powered full prompt rewriting |
 | `default_knob_expander` | Opus-powered knob value invention |
+
+### Wiring the feedback loop
+
+The outer loop needs structured feedback to learn. Here's how chess-evolve connects evaluation results back to factory's reflector:
+
+**Build a `CycleRecord`** from your evaluation results ([`game.py:to_cycle_record()`](src/chess_evolve/game.py)). Include domain-specific context in the `ExperimentRecord.hypothesis` field -- this is what the reflector reads during contrastive analysis. Chess-evolve includes move history, eval curve, blunder locations, selector reasoning, and verifier output.
+
+**Pass prompt mutations to the reflector** via `knob_values_by_id` ([`evolution.py`](src/chess_evolve/evolution.py)). The reflector only sees knob values by default; prompt mutations live on the workflow IR and are invisible unless you explicitly include `_prompt_<node>` entries.
+
+**Separate format from strategy in prompts.** If your pipeline has agents with strict output format requirements (e.g., "respond with exactly one UCI move"), put the format constraint in the system prompt (`_sdk_invoke_agent`), not the `prompt_template`. The `PROMPT_MUTATE` operator rewrites `prompt_template` -- if format rules are mixed in, the rewriter can break the output contract.
+
+**Read agent outputs from memory**, not the filesystem. `result.node_outputs["selector"]` gives you the agent's response directly. The filesystem path (`move.md`, `reviews/strategist-latest.md`) is unreliable -- files can be stale, missing, or from a previous pipeline run.
+
+**Track failure modes** so the reflector can learn from them. Chess-evolve logs illegal moves (selector produced valid notation but the move isn't legal on the current board) and includes them in the CycleRecord so the reflector can steer toward configs that produce fewer hallucinated moves.
 
 ### The minimal integration
 
