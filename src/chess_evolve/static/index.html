@@ -535,7 +535,7 @@ function _updateUI() {
     const avgCp = ec.length ? Math.round(ec.reduce((a,b) => a+b, 0) / ec.length) : 0;
     let total = 0;
     for (const cp of ec) {
-      if (cp >= -500) total += cp;
+      if (cp >= -500) total += cp + 500;
       else break;
     }
     const composite = total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);
@@ -648,7 +648,7 @@ function computeGameScore(g) {
   const ec = g.eval_curve || [];
   let total = 0;
   for (const cp of ec) {
-    if (cp >= -500) total += cp;
+    if (cp >= -500) total += cp + 500;
     else break;
   }
   return total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);

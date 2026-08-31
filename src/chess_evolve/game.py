@@ -96,12 +96,14 @@ class EvalResult:
 
     @property
     def composite_score(self) -> float:
-        # Sum of cp scores while above -500cp (rewards survival + quality)
+        # Sum of (cp + 500) while above -500cp — each move contributes
+        # how far above the cutoff it is (e.g., -450cp → +50, +100cp → +600)
+        threshold = -500
         total = 0.0
         for g in self.games:
             for cp in g.get("eval_curve", []):
-                if cp >= -500:
-                    total += cp
+                if cp >= threshold:
+                    total += cp - threshold
                 else:
                     break
         # Draws always beat any loss, wins always beat any draw
