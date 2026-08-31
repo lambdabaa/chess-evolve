@@ -165,7 +165,7 @@ async def main():
         reflection_report = None
         reflection = ""
         if cycle_records:
-            record_ids = list(cycle_records.keys())[-20:]
+            record_ids = list(cycle_records.keys())
             records = [(iid, cycle_records[iid].score_end or 0, cycle_records[iid])
                        for iid in record_ids]
             knob_vals = {}
