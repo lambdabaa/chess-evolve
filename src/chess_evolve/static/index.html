@@ -563,6 +563,14 @@ function updateUI() {
         ${turnHtml}
         ${pipeHtml}
         <div class="moves">${formatMoves(g.moves)}</div>
+        ${g.node_outputs && Object.keys(g.node_outputs).length > 0
+          ? `<div style="margin-top:4px;">
+              <span style="font-size:9px;color:#58a6ff;cursor:pointer;"
+                onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+                ▸ agent outputs</span>
+              <div style="display:none;">${renderNodeOutputs(g.node_outputs)}</div>
+            </div>`
+          : ''}
       </div>`;
   }
   // Close last gen group
