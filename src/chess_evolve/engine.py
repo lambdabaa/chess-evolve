@@ -340,7 +340,7 @@ async def get_pipeline_move(
                 ex = _executor_holder.get("ex")
                 if ex and event.node_id in ex.result.node_outputs:
                     output = ex.result.node_outputs[event.node_id]
-                    node_outputs[event.node_id] = output[:500]
+                    node_outputs[event.node_id] = output
                     broadcast_game_state(
                         game_tag, board, game_moves or [], llm_white,
                         stockfish_elo, move_count=move_count,
