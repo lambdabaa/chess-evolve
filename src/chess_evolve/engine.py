@@ -390,8 +390,9 @@ async def get_pipeline_move(
         _runner.invoke_agent = _orig_invoke  # type: ignore[assignment]
 
     import sys
+    move_tag = game_tag or "?"
     print(
-        f"  [EXEC] outputs={list(result.node_outputs.keys())}"
+        f"  [{move_tag}] EXEC outputs={list(result.node_outputs.keys())}"
         f" halted={result.halted}",
         file=sys.stderr, flush=True,
     )
@@ -403,13 +404,18 @@ async def get_pipeline_move(
                 fpath.parent.mkdir(parents=True, exist_ok=True)
                 fpath.write_text(output)
                 print(
-                    f"  [WRITE] {wpath} ({len(output)} chars)",
+                    f"  [{move_tag}] WRITE {wpath} ({len(output)} chars)",
                     file=sys.stderr, flush=True,
                 )
 
     move_file = chess_dir / "move.md"
     move = None
     move_source = "none"
+    if not move_file.exists():
+        print(
+            f"  [{move_tag}] move.md MISSING after exec",
+            file=sys.stderr, flush=True,
+        )
     if move_file.exists():
         raw = move_file.read_text().strip()
         move = _extract_move(raw, board)
