@@ -125,13 +125,32 @@ async def _sdk_invoke_agent(
     """Drop-in for factory's invoke_agent using Haiku API or CLI."""
     system = f"You are a chess {role}. Be concise — max 100 words."
     if role == "strategist":
-        system += (
-            "\n\nCRITICAL: Your ENTIRE response "
-            "must be exactly one UCI move for YOUR color (check the board). "
-            "Format: source square + destination square "
-            "(4 chars like e2e4) or with promotion piece (5 chars like e7e8q). "
-            "Always include the source square. No explanation. Just the move."
-        )
+        # Check if candidate_moves > 1 from board state context
+        n_candidates = 1
+        if "CANDIDATES:" in task:
+            import re as _re
+            cm = _re.search(r'CANDIDATES:\s*(\d+)', task)
+            if cm:
+                n_candidates = int(cm.group(1))
+        if n_candidates > 1:
+            system += (
+                f"\n\nList your top {n_candidates} candidate moves "
+                "for YOUR color, one per line, best first. "
+                "Format: source+destination (e.g. e2e4). "
+                "For each, briefly note if it hangs a piece. "
+                "No other text."
+            )
+        else:
+            system += (
+                "\n\nCRITICAL: Your ENTIRE response "
+                "must be exactly one UCI move for YOUR color "
+                "(check the board). "
+                "Format: source square + destination square "
+                "(4 chars like e2e4) or with promotion piece "
+                "(5 chars like e7e8q). "
+                "Always include the source square. "
+                "No explanation. Just the move."
+            )
     reads = {
         ".factory/chess/board_state.md",
         ".factory/chess/analysis.md",
@@ -240,6 +259,8 @@ def _board_user_msg(
         f"You are {'White' if board.turn else 'Black'}.",
         f"Legal moves: {', '.join(legal_moves)}",
     ])
+    if cfg and cfg.candidate_moves > 1:
+        parts.append(f"CANDIDATES: {cfg.candidate_moves}")
     if cfg:
         parts.append(_get_phase_hint(cfg, phase))
     else:

@@ -32,6 +32,7 @@ KNOB_SPACE: list[tuple[str, list]] = [
     ("tactical_style", ["broad", "mate_focused", "material"]),
     ("positional_style", ["classical", "dynamic", "prophylactic"]),
     ("selector_style", ["balanced", "aggressive", "defensive", "calculating"]),
+    ("candidate_moves", [1, 2, 3, 5]),
     ("verify_style", ["strict", "standard", "lenient"]),
     ("verify_iterations", list(range(11))),
     ("critique_style", ["devils_advocate", "sanity_check"]),
@@ -68,6 +69,7 @@ class PipelineConfig:
     tactical_style: str = "broad"
     positional_style: str = "classical"
     selector_style: str = "balanced"
+    candidate_moves: int = 1
     verify_style: str = "strict"
     verify_iterations: int = 2
     critique_style: str = "sanity_check"

@@ -257,14 +257,14 @@ async def main():
 
         # Step 2: Mutation
         strategy = WeightedRandomStrategy(weights={
-            MutationType.NODE_INSERT.value: 0,
+            MutationType.NODE_INSERT.value: 0.10,
             MutationType.NODE_REMOVE.value: 0,
             MutationType.EDGE_REDIRECT.value: 0,
             MutationType.PARALLELIZE.value: 0,
             MutationType.SERIALIZE.value: 0,
             MutationType.PARAM_MUTATE.value: 0.05,
-            MutationType.PROMPT_MUTATE.value: 0.50,
-            MutationType.KNOB_MUTATE.value: 0.45,
+            MutationType.PROMPT_MUTATE.value: 0.45,
+            MutationType.KNOB_MUTATE.value: 0.40,
         })
         if stalled and hasattr(strategy, "on_plateau"):
             strategy.on_plateau()
