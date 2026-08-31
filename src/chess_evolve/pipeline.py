@@ -51,7 +51,7 @@ class PipelineConfig:
     model: str = "haiku"
     think_tokens: int = 200
     include_analyst: bool = True
-    opponent_elo: int = 1320
+    opponent_elo: int = 1500
     endgame_threshold: int = 25
     use_game_context: bool = False
     use_game_plan: bool = False
