@@ -1046,7 +1046,7 @@ function updateEloChart() {
   // Grid lines
   ctx.strokeStyle = '#21262d';
   ctx.lineWidth = 1;
-  const gridStep = cpRange > 2000 ? 500 : cpRange > 800 ? 200 : cpRange > 400 ? 100 : 50;
+  const gridStep = cpRange > 50 ? 10 : cpRange > 20 ? 5 : cpRange > 10 ? 2 : 1;
   for (let cp = Math.ceil(minCp / gridStep) * gridStep; cp <= maxCp; cp += gridStep) {
     ctx.beginPath();
     ctx.moveTo(pad.left, y(cp));
@@ -1055,7 +1055,7 @@ function updateEloChart() {
     ctx.fillStyle = '#8b949e';
     ctx.font = '10px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText((cp >= 0 ? '+' : '') + cp, pad.left - 6, y(cp) + 3);
+    ctx.fillText(cp.toFixed(1), pad.left - 6, y(cp) + 3);
   }
   // Zero line
   if (minCp < 0 && maxCp > 0) {
