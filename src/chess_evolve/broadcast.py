@@ -16,12 +16,23 @@ if TYPE_CHECKING:
     from chess_evolve.pipeline import PipelineConfig
 
 
+def _read_existing_outputs(safe_name: str) -> dict:
+    """Read node_outputs from existing game file to preserve across updates."""
+    path = LIVE_DIR / f"{safe_name}.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text()).get("node_outputs", {})
+        except Exception:
+            pass
+    return {}
+
+
 def broadcast_game_state(
     tag: str, board: chess.Board, game_moves: list[str],
     llm_white: bool, elo: int, result: str | None = None,
     move_count: int = 0, gen: int = 0, config: str = "",
     whose_turn: str = "", active_node: str = "",
-    node_outputs: dict[str, str] | None = None,
+    node_outputs: dict | None = None,
     eval_curve: list[int] | None = None,
     full_config: str = "",
 ) -> None:
@@ -42,7 +53,10 @@ def broadcast_game_state(
         "full_config": full_config,
         "whose_turn": whose_turn or ("llm" if is_llm_turn else "stockfish"),
         "active_node": active_node,
-        "node_outputs": node_outputs or {},
+        "node_outputs": (
+            node_outputs if node_outputs is not None
+            else _read_existing_outputs(safe_name)
+        ),
         "eval_curve": eval_curve or [],
         "game_phase": detect_phase(board.fen()),
     }
