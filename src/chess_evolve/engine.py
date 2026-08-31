@@ -151,8 +151,6 @@ async def _sdk_invoke_agent(
             reviews_dir.mkdir(parents=True, exist_ok=True)
             (reviews_dir / f"{role}-latest.md").write_text(text)
         else:
-            import sys
-            print(f"  [DBG] empty response for role={role} task_len={len(task)}", file=sys.stderr, flush=True)
             text = "No analysis available."
         return text, 0
 
@@ -366,8 +364,6 @@ async def get_pipeline_move(
     finally:
         _runner.invoke_agent = _orig_invoke  # type: ignore[assignment]
 
-    import sys
-    print(f"  [DBG] outputs={list(result.node_outputs.keys())} halted={result.halted} reason={result.halt_reason}", file=sys.stderr, flush=True)
     for nid, output in result.node_outputs.items():
         node = wf.nodes.get(nid)
         if node and node.writes and output:
