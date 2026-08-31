@@ -39,7 +39,7 @@ This demo has two layers: **factory integration** (reusable pattern) and **chess
 
 These files show the pattern you'd follow regardless of domain:
 
-**`pipeline.py`** defines the workflow as a composition of Packages:
+**[`pipeline.py`](src/chess_evolve/pipeline.py)** defines the workflow as a composition of Packages:
 ```python
 pipeline = Sequential(
     Parallel(analyst_pkg, tactical_pkg, positional_pkg),
@@ -49,7 +49,7 @@ wf = pipeline.compile()  # lowers to flat DAG with knob_values
 ```
 Your version: compose your domain's agents into a pipeline using `Sequential`, `Parallel`, `Loop`, and `Conditional`.
 
-**`pipeline.py`** also declares `OptKnob`s on each Package, telling factory what it's allowed to mutate:
+**[`pipeline.py`](src/chess_evolve/pipeline.py)** also declares `OptKnob`s on each Package, telling factory what it's allowed to mutate:
 ```python
 OptKnob(name="verify_style", kind="prompt", node_id="verifier",
         default="strict", bounds=["strict", "standard", "lenient"],
@@ -57,7 +57,7 @@ OptKnob(name="verify_style", kind="prompt", node_id="verifier",
 ```
 Your version: declare knobs for your domain's tunable parameters.
 
-**`evolution.py`** runs the outer loop using factory's components:
+**[`evolution.py`](src/chess_evolve/evolution.py)** runs the outer loop using factory's components:
 ```python
 archive = MAPElitesArchive()
 reflector = OuterLoopReflector(k=3)
@@ -73,15 +73,15 @@ for gen in range(N):
 ```
 Your version: same loop, just change `evaluate()` to score your domain.
 
-**`evolution.py`** also defines `chess_features()` for MAP-Elites diversity. Each feature dimension you care about gets a slot in the tuple so that diverse strategies survive in the archive. Your version: define features that capture meaningful variation in your domain.
+**[`evolution.py`](src/chess_evolve/evolution.py)** also defines `chess_features()` for MAP-Elites diversity. Each feature dimension you care about gets a slot in the tuple so that diverse strategies survive in the archive. Your version: define features that capture meaningful variation in your domain.
 
 ### Domain-specific code (replace these)
 
-**`prompts.py`** contains all chess-specific prompt templates. Your version: write prompts for your domain's agents.
+**[`prompts.py`](src/chess_evolve/prompts.py)** contains all chess-specific prompt templates. Your version: write prompts for your domain's agents.
 
-**`engine.py`** handles the LLM-to-domain interface: sending board state to the LLM, parsing moves from its output, calling Stockfish for the opponent. Your version: implement your domain's I/O (e.g., sending a code problem to the LLM, parsing its solution, running tests).
+**[`engine.py`](src/chess_evolve/engine.py)** handles the LLM-to-domain interface: sending board state to the LLM, parsing moves from its output, calling Stockfish for the opponent. Your version: implement your domain's I/O (e.g., sending a code problem to the LLM, parsing its solution, running tests).
 
-**`game.py`** plays a single game and computes a score. `EvalResult` holds the outcome; `play_game()` manages the game loop; `evaluate_pipeline()` runs N games and averages. Your version: implement your domain's evaluation (run the task, measure quality, return a score).
+**[`game.py`](src/chess_evolve/game.py)** plays a single game and computes a score. `EvalResult` holds the outcome; `play_game()` manages the game loop; `evaluate_pipeline()` runs N games and averages. Your version: implement your domain's evaluation (run the task, measure quality, return a score).
 
 ### What factory provides (you don't write these)
 
