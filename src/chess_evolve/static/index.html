@@ -162,7 +162,7 @@
 <div class="subtitle">
   Can factory's evolutionary outer loop teach an LLM to beat Stockfish?
   Each move runs a <code>Package</code> pipeline through the real <code>WorkflowExecutor</code>.
-  Best config locked from 8000 experiments. Factory tunes 5 remaining knobs via <code>KNOB_MUTATE</code> (guided by knob-contrastive reflection) and rewrites agent prompts via <code>PROMPT_MUTATE</code> (Opus analyzes blunders, rewrites full prompts — not append, replacement).
+  Factory searches 10 knobs (456K combinations) via <code>KNOB_MUTATE</code> (guided by knob-contrastive reflection) and rewrites agent prompts via <code>PROMPT_MUTATE</code> (Opus rewrites full prompts based on blunder analysis).
   Scored by wins (+500), draws (+200), position quality, and survival.
 </div>
 
@@ -245,18 +245,31 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
   <div style="flex:1; min-width:300px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
     <h3 style="color:#58a6ff; font-size:13px; margin-bottom:8px;">Optimization Surface</h3>
     <pre style="color:#c9d1d9; font-size:11px; line-height:1.5; margin:0;">
-<span style="color:#f0883e"># ── 5 tunable knobs ──────────────</span>
+<span style="color:#f0883e"># ── 10 tunable knobs ─────────────</span>
 
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"analysis_style"</span>,
+  [<span style="color:#a5d6ff">"concise"</span>,<span style="color:#a5d6ff">"detailed"</span>,<span style="color:#a5d6ff">"threat_focused"</span>])
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"tactical_style"</span>,
+  [<span style="color:#a5d6ff">"broad"</span>,<span style="color:#a5d6ff">"mate_focused"</span>,<span style="color:#a5d6ff">"material"</span>])
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"positional_style"</span>,
+  [<span style="color:#a5d6ff">"classical"</span>,<span style="color:#a5d6ff">"dynamic"</span>,<span style="color:#a5d6ff">"prophylactic"</span>])
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"selector_style"</span>,
+  [<span style="color:#a5d6ff">"balanced"</span>,<span style="color:#a5d6ff">"aggressive"</span>,<span style="color:#a5d6ff">"defensive"</span>,
+   <span style="color:#a5d6ff">"calculating"</span>])
 <span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"verify_style"</span>,
-  bounds=[<span style="color:#a5d6ff">"strict"</span>, <span style="color:#a5d6ff">"standard"</span>,
-          <span style="color:#a5d6ff">"lenient"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"verify_iterations"</span>,
-  bounds=[0..10])
+  [<span style="color:#a5d6ff">"strict"</span>,<span style="color:#a5d6ff">"standard"</span>,<span style="color:#a5d6ff">"lenient"</span>])
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"verify_iterations"</span>, [0..10])
 <span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"critique_style"</span>,
-  bounds=[<span style="color:#a5d6ff">"devils_advocate"</span>,
-          <span style="color:#a5d6ff">"sanity_check"</span>])
+  [<span style="color:#a5d6ff">"devils_advocate"</span>,<span style="color:#a5d6ff">"sanity_check"</span>])
 <span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"opening_hint"</span>,
-  bounds=[<span style="color:#a5d6ff">"theory"</span>, <span style="color:#a5d6ff">"principled"</span>])
+  [<span style="color:#a5d6ff">"principled"</span>,<span style="color:#a5d6ff">"aggressive"</span>,<span style="color:#a5d6ff">"solid"</span>,
+   <span style="color:#a5d6ff">"theory"</span>])
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"middlegame_hint"</span>,
+  [<span style="color:#a5d6ff">"safety_first"</span>,<span style="color:#a5d6ff">"attacking"</span>,
+   <span style="color:#a5d6ff">"positional"</span>,<span style="color:#a5d6ff">"theory"</span>])
+<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"endgame_hint"</span>,
+  [<span style="color:#a5d6ff">"technical"</span>,<span style="color:#a5d6ff">"aggressive"</span>,
+   <span style="color:#a5d6ff">"defensive"</span>,<span style="color:#a5d6ff">"theory"</span>])
 
 <span style="color:#f0883e"># ── Prompt mutation (free-form) ──</span>
 <span style="color:#8b949e"># Opus rewrites agent prompts each</span>
