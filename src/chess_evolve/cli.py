@@ -22,7 +22,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "run":
-        from chess_evolve.evolve import main as evolve_main
+        from chess_evolve.evolution import main as evolve_main
         asyncio.run(evolve_main())
     elif args.command == "serve":
         subprocess.run(

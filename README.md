@@ -17,27 +17,11 @@ The outer loop evolves this pipeline using factory's MAP-Elites quality-diversit
 - Contrastive reflection identifies which knobs and prompts drive performance
 - Rank-weighted tournament selection biases toward stronger parents
 
-## Factory APIs used
-
-| Component | What it does |
-|---|---|
-| `Package`, `Sequential`, `Parallel`, `Loop` | Compose the chess pipeline from reusable subgraphs |
-| `OptKnob` | Declare tunable parameters the outer loop can mutate |
-| `WorkflowExecutor` | Execute the compiled DAG per chess move |
-| `MAPElitesArchive` | Quality-diversity archive preserving diverse strategies |
-| `OuterLoopReflector` | Contrastive analysis of winners vs losers |
-| `apply_random_mutation` | Mutation operators (knob, prompt, param) |
-| `CycleRecord` | Structured experiment exhaust for reflection |
-
 ## Quick start
 
 ```bash
-# Install
 uv sync
-
-# Install Stockfish
-brew install stockfish  # macOS
-# or: apt install stockfish
+brew install stockfish  # macOS (or apt install stockfish)
 
 # Run the evolution loop
 chess-evolve run
@@ -47,30 +31,87 @@ chess-evolve serve
 # Open http://localhost:8422
 ```
 
-## Configuration
+## Adapting this to your domain
 
-Environment variables:
+This demo has two layers: **factory integration** (reusable pattern) and **chess logic** (domain-specific). If you're building something similar for a different domain, here's what to keep, what to replace, and what to study.
+
+### The factory integration pattern (study these)
+
+These files show the pattern you'd follow regardless of domain:
+
+**`pipeline.py`** defines the workflow as a composition of Packages:
+```python
+pipeline = Sequential(
+    Parallel(analyst_pkg, tactical_pkg, positional_pkg),
+    Loop(Sequential(selector_pkg, verifier_pkg), gate, max_iterations=2),
+)
+wf = pipeline.compile()  # lowers to flat DAG with knob_values
+```
+Your version: compose your domain's agents into a pipeline using `Sequential`, `Parallel`, `Loop`, and `Conditional`.
+
+**`pipeline.py`** also declares `OptKnob`s on each Package, telling factory what it's allowed to mutate:
+```python
+OptKnob(name="verify_style", kind="prompt", node_id="verifier",
+        default="strict", bounds=["strict", "standard", "lenient"],
+        expandable=True, expansion_hint="Verification approach")
+```
+Your version: declare knobs for your domain's tunable parameters.
+
+**`evolution.py`** runs the outer loop using factory's components:
+```python
+archive = MAPElitesArchive()
+reflector = OuterLoopReflector(k=3)
+strategy = WeightedRandomStrategy(weights={...})
+
+for gen in range(N):
+    report = reflector.reflect(records)
+    parent = archive.sample_parent(tournament_size=5, rank_weighted=True)
+    child_wf, rec = apply_random_mutation(parent_wf, strategy, gen,
+                                          reflection_report=report)
+    score = await evaluate(child_wf)
+    archive.add(individual)
+```
+Your version: same loop, just change `evaluate()` to score your domain.
+
+**`evolution.py`** also defines `chess_features()` for MAP-Elites diversity. Each feature dimension you care about gets a slot in the tuple so that diverse strategies survive in the archive. Your version: define features that capture meaningful variation in your domain.
+
+### Domain-specific code (replace these)
+
+**`prompts.py`** contains all chess-specific prompt templates. Your version: write prompts for your domain's agents.
+
+**`engine.py`** handles the LLM-to-domain interface: sending board state to the LLM, parsing moves from its output, calling Stockfish for the opponent. Your version: implement your domain's I/O (e.g., sending a code problem to the LLM, parsing its solution, running tests).
+
+**`game.py`** plays a single game and computes a score. `EvalResult` holds the outcome; `play_game()` manages the game loop; `evaluate_pipeline()` runs N games and averages. Your version: implement your domain's evaluation (run the task, measure quality, return a score).
+
+### What factory provides (you don't write these)
+
+| Component | What it does |
+|---|---|
+| `Package`, `Sequential`, `Parallel`, `Loop`, `Conditional` | Compose agents into a DAG |
+| `OptKnob`, `StateContract`, `Port` | Declare the optimization surface |
+| `WorkflowExecutor` | Execute the compiled DAG |
+| `MAPElitesArchive` | Quality-diversity archive (preserves diverse strategies) |
+| `OuterLoopReflector` | Contrastive analysis (what works, what doesn't, why) |
+| `apply_random_mutation` | Mutation operators: `KNOB_MUTATE`, `PROMPT_MUTATE`, `PARAM_MUTATE` |
+| `WeightedRandomStrategy` | Configurable operator selection weights |
+| `CycleRecord` | Structured experiment data for reflection |
+| `default_prompt_rewriter` | Opus-powered full prompt rewriting |
+| `default_knob_expander` | Opus-powered knob value invention |
+
+### The minimal integration
+
+At its simplest, using factory as a library requires three things:
+
+1. **Define your pipeline** with `Package` + composition operators
+2. **Declare `OptKnob`s** on the parameters you want optimized
+3. **Write an `evaluate()` function** that takes a compiled workflow and returns a score
+
+Factory handles mutation, selection, diversity preservation, and reflection automatically.
+
+## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
 | `CHESS_MODEL` | `opus` | Model for the `claude` CLI (move generation uses Vertex Haiku) |
 | `CHESS_WORKSPACE` | `/tmp/chess-factory` | Working directory for game data |
 
-## Architecture
-
-```
-chess_evolve/
-  evolve.py    # Pipeline definition + evolution loop (~1900 lines)
-  serve.py     # FastAPI server with SSE for live UI (~900 lines)
-  cli.py       # CLI entry point
-  static/
-    index.html # Live dashboard (~1100 lines)
-```
-
-The chess-specific code handles:
-- Board representation and move parsing (python-chess)
-- Stockfish opponent (configurable ELO)
-- Game evaluation (composite scoring: position quality + survival + wins)
-- Phase detection (opening/middlegame/endgame) with phase-specific prompts
-
-Everything else is factory: pipeline composition, execution, mutation, selection, reflection.
