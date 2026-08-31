@@ -855,7 +855,7 @@ function updateLog() {
     logPanel.innerHTML = '';
     return;
   }
-  const evalEntries = logEntries.filter(e => e.type !== 'reflection');
+  const evalEntries = logEntries.filter(e => e.type !== 'reflection' && e.type !== 'mutation_info');
   if (evalEntries.length === 0) { logPanel.innerHTML = ''; return; }
   let html = '<h2>Experiment Log</h2><table class="log-table"><tr>';
   html += '<th>Gen</th><th>Candidate</th><th>W/D/L</th><th>Score</th><th></th><th>Avg cp</th><th>Blun</th><th>Moves</th><th>Config</th></tr>';
