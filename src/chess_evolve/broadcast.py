@@ -53,7 +53,7 @@ def broadcast_game_state(
 
 def broadcast_eval_result(
     label: str, cfg: PipelineConfig, result: EvalResult,
-    gen: int, is_best: bool = False,
+    gen: int, is_best: bool = False, in_archive: bool = False,
 ) -> None:
     """Append an eval result to the experiment log for the web UI."""
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,6 +74,7 @@ def broadcast_eval_result(
         "composite": result.composite_score,
         "config": cfg.label,
         "is_best": is_best,
+        "in_archive": in_archive,
     }
     log_path = LIVE_DIR / "experiment_log.jsonl"
     with open(log_path, "a") as f:
