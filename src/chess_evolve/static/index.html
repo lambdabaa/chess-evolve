@@ -635,8 +635,8 @@ function toggleGen(gen) {
 
 const logCollapsed = {};
 function toggleLogGen(gen) {
-  const isOpen = (gen in logCollapsed) ? !logCollapsed[gen] : false;
-  logCollapsed[gen] = !isOpen;
+  const wasOpen = (gen in logCollapsed) ? logCollapsed[gen] : (gen === Math.max(...Object.keys(logCollapsed).map(Number), 0));
+  logCollapsed[gen] = !wasOpen;
   updateLog(); updateEloChart(); updateMutationDist();
 }
 
@@ -887,7 +887,7 @@ function updateLog() {
   let currentGen = -1;
 
   for (const e of evalEntries) {
-    const isOpen = (e.gen in logCollapsed) ? !logCollapsed[e.gen] : e.gen === latestGen;
+    const isOpen = (e.gen in logCollapsed) ? logCollapsed[e.gen] : e.gen === latestGen;
     // Gen header row (clickable to toggle)
     if (e.gen !== currentGen) {
       currentGen = e.gen;
