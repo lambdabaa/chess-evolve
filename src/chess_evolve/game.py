@@ -380,16 +380,15 @@ async def evaluate_pipeline(
     eval_tag: str = "",
     gen: int = 0,
 ) -> EvalResult:
-    game_tasks = []
+    games = []
     for i in range(n_games):
         color = "W" if i % 2 == 0 else "B"
         game_tag = f"{eval_tag}:g{i+1}({color})"
-        game_tasks.append(play_game(
+        game = await play_game(
             pipeline, cfg, llm_plays_white=(i % 2 == 0),
             game_tag=game_tag, gen=gen,
-        ))
-
-    games = await asyncio.gather(*game_tasks)
+        )
+        games.append(game)
 
     result = EvalResult()
     for game in games:
