@@ -138,21 +138,14 @@ class EvalResult:
                         succeeded=True, node_id=f"game{i}_{role}",
                     ))
                     order += 1
-            for b, detail in enumerate(blunder_details):
-                steps.append(AgentStep(
-                    order=order, role="blunder", started_at="",
-                    duration_s=0, cost_usd=None, output_tokens=None,
-                    succeeded=False, error=detail,
-                    node_id=f"game{i}_blunder{b}",
-                ))
-                order += 1
             curve_str = ",".join(f"{c:+d}" for c in curve[-10:])
             avg = sum(curve) / len(curve) if curve else 0
+            blunder_str = "; ".join(blunder_details[:3]) if blunder_details else "none"
             hypothesis = (
                 f"{g.get('tag', '')} | {result} in {len(moves)} moves | "
                 f"moves: {move_str[:200]} | "
                 f"eval: [{curve_str}] | "
-                f"blunders: {len(blunder_details)}"
+                f"blunders ({len(blunder_details)}): {blunder_str}"
             )
             experiments.append(ExperimentRecord(
                 exp_id=i, hypothesis=hypothesis,
