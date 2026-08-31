@@ -23,7 +23,7 @@ from chess_evolve.prompts import (
 )
 
 _client = None
-_api_semaphore = asyncio.Semaphore(10)
+_api_semaphore = asyncio.Semaphore(5)
 CHESS_MODEL = os.environ.get("CHESS_MODEL", "opus")
 USE_HAIKU_API = os.environ.get("CHESS_USE_HAIKU_API", "").lower() in ("1", "true", "yes")
 HAIKU_MODEL = os.environ.get("CHESS_HAIKU_MODEL", "claude-haiku-4-5-20251001")
