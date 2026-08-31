@@ -4,50 +4,57 @@ from __future__ import annotations
 
 import random
 
-from factory.workflow.primitives import AgentNode, AgentRole, Workflow
+from factory.outer_loop.similarity import compute_features
+from factory.workflow.primitives import AgentNode
 
-from chess_evolve.evolution import chess_features, mutate_knobs
-from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, _PROMPT_NODES, build_pipeline
+from chess_evolve.evolution import mutate_knobs
+from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, build_pipeline
 
 
-class TestChessFeatures:
-    def test_returns_tuple(self, default_config):
-        features = chess_features(default_config)
-        assert isinstance(features, tuple)
+class TestFactoryFeatures:
+    """Verify factory's compute_features differentiates our knob combos."""
 
-    def test_knob_only_dims(self, default_config):
-        features = chess_features(default_config, wf=None)
-        assert len(features) == 5  # 5 knob dimensions
+    def test_different_knobs_different_features(self):
+        wf1 = build_pipeline(PipelineConfig(verify_style="strict")).compile()
+        wf2 = build_pipeline(PipelineConfig(verify_style="lenient")).compile()
+        assert compute_features(wf1) != compute_features(wf2)
 
-    def test_with_workflow_adds_prompt_dims(self, default_config):
-        wf = build_pipeline(default_config).compile()
-        features = chess_features(default_config, wf)
-        assert len(features) == 5 + len(_PROMPT_NODES)
-
-    def test_different_prompts_different_features(self, default_config):
-        wf1 = build_pipeline(default_config).compile()
-        wf2 = build_pipeline(default_config).compile()
+    def test_different_prompts_different_features(self):
+        cfg = PipelineConfig()
+        wf1 = build_pipeline(cfg).compile()
+        wf2 = build_pipeline(cfg).compile()
         node = wf2.nodes["tactician"]
         assert isinstance(node, AgentNode)
         wf2.nodes["tactician"] = node.model_copy(
-            update={"prompt_template": "completely different prompt text for testing"}
+            update={"prompt_template": "completely different prompt"}
         )
-        f1 = chess_features(default_config, wf1)
-        f2 = chess_features(default_config, wf2)
-        assert f1 != f2
+        assert compute_features(wf1) != compute_features(wf2)
 
-    def test_same_config_same_features(self, default_config):
-        wf = build_pipeline(default_config).compile()
-        f1 = chess_features(default_config, wf)
-        f2 = chess_features(default_config, wf)
-        assert f1 == f2
+    def test_same_config_same_features(self):
+        cfg = PipelineConfig()
+        wf = build_pipeline(cfg).compile()
+        assert compute_features(wf) == compute_features(wf)
 
-    def test_different_knobs_different_features(self):
-        cfg1 = PipelineConfig(use_verification=True)
-        cfg2 = PipelineConfig(use_verification=False)
-        f1 = chess_features(cfg1)
-        f2 = chess_features(cfg2)
-        assert f1 != f2
+    def test_fixed_length(self):
+        wf1 = build_pipeline(PipelineConfig(use_verification=True)).compile()
+        wf2 = build_pipeline(PipelineConfig(use_verification=False)).compile()
+        assert len(compute_features(wf1)) == len(compute_features(wf2))
+
+    def test_all_knob_combos_unique(self):
+        import dataclasses
+        seen = set()
+        for vs in ["strict", "lenient"]:
+            for uv in [True, False]:
+                for oh in ["theory", "principled"]:
+                    cfg = dataclasses.replace(
+                        PipelineConfig(),
+                        verify_style=vs,
+                        use_verification=uv,
+                        opening_hint=oh,
+                    )
+                    f = compute_features(build_pipeline(cfg).compile())
+                    seen.add(f)
+        assert len(seen) == 2 * 2 * 2
 
 
 class TestMutateKnobs:
@@ -72,7 +79,9 @@ class TestMutateKnobs:
         if desc != "no-op":
             knob_name = desc.split("=")[0]
             new_val = getattr(new_cfg, knob_name)
-            choices = [c for _, (name, c) in enumerate(KNOB_SPACE) if name == knob_name][0]
+            choices = [
+                c for _, (name, c) in enumerate(KNOB_SPACE) if name == knob_name
+            ][0]
             assert new_val in choices
 
     def test_deterministic_with_seed(self, default_config):

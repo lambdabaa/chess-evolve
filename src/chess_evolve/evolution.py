@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 import json
 import random
 import shutil
@@ -14,40 +13,14 @@ from factory.outer_loop.models import MutationType
 from factory.outer_loop.mutations import WeightedRandomStrategy, apply_random_mutation
 from factory.outer_loop.population import MAPElitesArchive, Population
 from factory.outer_loop.reflector import OuterLoopReflector
-from factory.workflow.primitives import Workflow
 
 from chess_evolve.broadcast import broadcast_archive, broadcast_eval_result
 from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
 from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, YELLOW, header, print
 from chess_evolve.engine import _cli_call_opus
 from chess_evolve.game import EvalResult, evaluate_pipeline
-from chess_evolve.pipeline import _PROMPT_NODES, KNOB_SPACE, PipelineConfig, build_pipeline
+from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, build_pipeline
 from chess_evolve.prompts import PROMPT_REGISTRY, _register_prompt
-
-
-def chess_features(cfg: PipelineConfig, wf: Workflow | None = None) -> tuple[int, ...]:
-    """Feature vector for MAP-Elites grid.
-
-    Each prompt-mutable node gets its own dimension so the best prompt
-    for each node survives independently in the archive.
-    """
-    knob_dims = tuple(
-        int(hashlib.sha256(
-            str(getattr(cfg, name)).encode()
-        ).hexdigest(), 16) % 8
-        for name, _ in KNOB_SPACE
-    )
-    if wf is None:
-        return knob_dims
-    prompt_dims = tuple(
-        int(hashlib.sha256(
-            (wf.nodes[nid].prompt_template or "").encode()
-        ).hexdigest(), 16) % 8
-        if nid in wf.nodes and hasattr(wf.nodes[nid], "prompt_template")
-        else 0
-        for nid in _PROMPT_NODES
-    )
-    return knob_dims + prompt_dims
 
 
 def mutate_knobs(
@@ -161,7 +134,6 @@ async def main():
     seed_ind = Population.make_individual(
         seed.compile(), generation=0, score=seed_result.composite_score
     )
-    seed_ind.features = chess_features(seed_cfg, seed.compile())
     archive.add(seed_ind)
     ind_configs: dict[str, PipelineConfig] = {seed_ind.id: seed_cfg}
     broadcast_eval_result(f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, gen=0, is_best=True)
@@ -339,7 +311,6 @@ async def main():
         for label, cfg, pipeline, result, elapsed in eval_results:
             score = result.composite_score
             ind = Population.make_individual(pipeline.compile(), generation=gen, score=score)
-            ind.features = chess_features(cfg, pipeline.compile())
             inserted = archive.add(ind)
             ind_configs[ind.id] = cfg
             cycle_records[ind.id] = result.to_cycle_record(gen)
