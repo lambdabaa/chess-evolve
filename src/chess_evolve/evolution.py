@@ -183,35 +183,45 @@ async def main():
                     for node, prompt in prompts.items():
                         vals[f"prompt_{node}"] = prompt[:100]
                     knob_vals[iid] = vals
+            # Factory's structural reflector (for guided mutations)
             try:
-                reflection_report = reflector.reflect(records, gen, knob_values_by_id=knob_vals)
-                parts = []
-                if reflection_report.failure_patterns:
-                    parts.append(f"Failures: {'; '.join(reflection_report.failure_patterns[:3])}")
-                if reflection_report.success_patterns:
-                    parts.append(f"Successes: {'; '.join(reflection_report.success_patterns[:3])}")
+                reflection_report = reflector.reflect(
+                    records, gen, knob_values_by_id=knob_vals,
+                )
                 if reflection_report.mutation_suggestions:
-                    sug = '; '.join(reflection_report.mutation_suggestions[:3])
-                    parts.append(f"Suggestions: {sug}")
-                reflection = " | ".join(parts)
-                # Replace hex IDs with human-readable labels
-                for iid, lbl in ind_labels.items():
-                    reflection = reflection.replace(iid[:8], lbl)
-                if reflection:
-                    print(f"\n  {MAGENTA}Reflection:{RESET} {reflection}")
+                    sug = '; '.join(
+                        reflection_report.mutation_suggestions[:3],
+                    )
+                    for iid, lbl in ind_labels.items():
+                        sug = sug.replace(iid[:8], lbl)
+                    print(
+                        f"\n  {DIM}Knob gradients: {sug}{RESET}"
+                    )
             except Exception as exc:
-                print(f"  {DIM}(reflection error: {exc}){RESET}")
+                print(f"  {DIM}(reflector error: {exc}){RESET}")
 
-        if not reflection and all_results:
+        # Opus reflection (primary — reads game data)
+        if all_results:
             try:
                 reflection = (await _cli_call_opus(
-                    "You are a concise chess optimization analyst. 2-3 sentences.",
-                    f"All results (top 20):\n{history}\n\nArchive: {archive.size} cells, "
-                    f"best={best_score:+.0f}\n"
-                    f"What patterns separate winners from losers? Where is the bottleneck?",
+                    "You are a chess coach analyzing an AI's games. "
+                    "Be specific about moves and positions. 3-4 sentences.",
+                    f"Results (top 20 by score):\n{history}\n\n"
+                    f"Archive: {archive.size} cells, "
+                    f"best={best_score:+.0f}\n\n"
+                    f"What specific chess mistakes keep recurring? "
+                    f"What concrete advice would fix the biggest "
+                    f"weakness?",
                 )).strip()
                 if reflection:
-                    print(f"\n  {MAGENTA}Reflection:{RESET} {reflection}")
+                    for iid, lbl in ind_labels.items():
+                        reflection = reflection.replace(
+                            iid[:8], lbl,
+                        )
+                    print(
+                        f"\n  {MAGENTA}Reflection:{RESET} "
+                        f"{reflection}"
+                    )
             except Exception:
                 pass
 

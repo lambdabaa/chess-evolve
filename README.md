@@ -143,6 +143,8 @@ The outer loop needs structured feedback to learn. Here's how chess-evolve conne
 
 **Track failure modes** so the reflector can learn from them. Chess-evolve logs illegal moves (selector produced valid notation but the move isn't legal on the current board) and includes them in the CycleRecord so the reflector can steer toward configs that produce fewer hallucinated moves.
 
+**Use two-tier reflection.** Factory's `OuterLoopReflector` does fast structural comparison (knob gradients, step counts) which drives guided mutations. But for domain-aware insights, chess-evolve also runs an LLM reflection pass (Opus via CLI) that reads actual game data and produces coaching advice like "stop relocating knights that are defending pieces." The structural reflector feeds `reflection_report` to `apply_random_mutation` for guided knob selection; the LLM reflection feeds `prompt_improvements` for prompt rewriting hints. Both run each generation — structural for mutation guidance, LLM for deep analysis.
+
 ### The minimal integration
 
 At its simplest, using factory as a library requires three things:
