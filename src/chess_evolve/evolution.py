@@ -145,7 +145,9 @@ async def main():
     score_trajectory: list[float] = [seed_result.composite_score]
     cycle_records: dict[str, CycleRecord] = {seed_ind.id: seed_result.to_cycle_record(0)}
     PLATEAU_WINDOW, PLATEAU_THRESHOLD = 10, 5.0
-    all_results: list[tuple[str, PipelineConfig, EvalResult, float]] = []
+    all_results: list[tuple[str, PipelineConfig, EvalResult, float]] = [
+        (f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, seed_result.composite_score),
+    ]
 
     # Evolutionary loop
     for gen in range(1, 1001):
