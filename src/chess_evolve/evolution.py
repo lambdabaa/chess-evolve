@@ -341,6 +341,14 @@ async def main():
         )
 
         async def eval_one(label, cfg, pipeline, mut_detail):
+            # Write mutation detail to log so UI tooltip works during play
+            if mut_detail.get("after"):
+                mut_entry = {
+                    "label": label + ":mut", "gen": gen,
+                    "mutation": mut_detail, "type": "mutation_info",
+                }
+                with open(LIVE_DIR / "experiment_log.jsonl", "a") as f:
+                    f.write(json.dumps(mut_entry) + "\n")
             result = await evaluate_pipeline(
                 pipeline, cfg,
                 n_games=GAMES_PER_EVAL, eval_tag=label, gen=gen,

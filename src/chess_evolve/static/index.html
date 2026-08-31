@@ -412,8 +412,8 @@ function formatCardTooltip(g) {
   const tag = g.tag || '';
   const baseTag = tag.replace(/:g\d+\([WB]\)$/, '');
   const logEntry = logEntries.find(
-    e => e.label && e.label === baseTag && e.mutation
-      && e.mutation.operator === 'prompt_mutate'
+    e => e.mutation && e.mutation.operator === 'prompt_mutate'
+      && e.label && (e.label === baseTag || e.label === baseTag + ':mut')
   );
   if (logEntry && logEntry.mutation.after) {
     const m = logEntry.mutation;
