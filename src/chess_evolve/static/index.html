@@ -171,17 +171,11 @@
     <h3 style="color:#58a6ff; font-size:13px; margin-bottom:8px;">Package Composition</h3>
     <pre style="color:#c9d1d9; font-size:11px; line-height:1.6; margin:0;">
 <span style="color:#8b949e"># Each chess move runs this pipeline.</span>
-<span style="color:#8b949e"># Sequential chains the phases in order.</span>
+<span style="color:#8b949e"># Sequential chains analysis → select+verify.</span>
 pipeline = <span style="color:#d29922">Sequential</span>(
 
-    <span style="color:#8b949e"># Phase-routed analysis via Conditional:</span>
-    <span style="color:#8b949e"># opening → lightweight, mid → all 3 parallel,</span>
-    <span style="color:#8b949e"># endgame → specialized king+pawn focus</span>
-    <span style="color:#d29922">Conditional</span>(phase_gate, {
-      <span style="color:#a5d6ff">"opening"</span>: opening_pkg,
-      <span style="color:#a5d6ff">"middle"</span>:  <span style="color:#d29922">Parallel</span>(anal, tact, pos),
-      <span style="color:#a5d6ff">"endgame"</span>: endgame_pkg,
-    }),
+    <span style="color:#8b949e"># All 3 agents analyze in parallel</span>
+    <span style="color:#d29922">Parallel</span>(analyst, tact, pos),
 
     <span style="color:#8b949e"># Verify loop: combined critique + blunder</span>
     <span style="color:#8b949e"># check in one call. Loops back to selector</span>
