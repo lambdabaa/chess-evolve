@@ -16,7 +16,7 @@ dependencies = [
 chess-evolve = "chess_evolve.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-timeout", "ruff"]
 
 [build-system]
 requires = ["hatchling"]
