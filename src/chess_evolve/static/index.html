@@ -622,7 +622,7 @@ function _updateUI() {
 
 function toggleGen(gen) {
   collapsedGens[gen] = !(collapsedGens[gen] ?? false);
-  updateGrid();
+  _updateUI();
 }
 
 const logCollapsed = {};
