@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 from pathlib import Path
-from unittest.mock import patch
 
 import chess
 from factory.workflow.executor import WorkflowExecutor
@@ -310,6 +309,8 @@ async def get_pipeline_move(
             key = node.prompt_template[:60]
             _node_reads_by_prompt[key] = node.reads
 
+    _executor_holder: dict[str, WorkflowExecutor] = {}
+
     def make_hooked_emit(original_emit):
         NODE_NAME_MAP = {
             "board_analyst": "analyst", "tactician": "tactician",
@@ -335,8 +336,9 @@ async def get_pipeline_move(
                     eval_curve=eval_curve, full_config=full_config_label,
                 )
             elif event_type == "node.completed":
-                if executor_ref and event.node_id in executor_ref[0].result.node_outputs:
-                    output = executor_ref[0].result.node_outputs[event.node_id]
+                ex = _executor_holder.get("ex")
+                if ex and event.node_id in ex.result.node_outputs:
+                    output = ex.result.node_outputs[event.node_id]
                     node_outputs[event.node_id] = output[:500]
                     node_def = wf.nodes.get(event.node_id)
                     if node_def and node_def.writes and output:
@@ -346,14 +348,20 @@ async def get_pipeline_move(
                             fpath.write_text(output)
         return _hooked_emit
 
-    executor_ref: list[WorkflowExecutor] = []
-    with patch("factory.agents.runner.invoke_agent", side_effect=_sdk_invoke_agent):
-        executor = WorkflowExecutor(workflow=wf, project_path=workspace, auto_approve=True)
-        executor_ref.append(executor)
+    import factory.agents.runner as _runner
+    _orig_invoke = _runner.invoke_agent
+    _runner.invoke_agent = _sdk_invoke_agent  # type: ignore[assignment]
+    try:
+        executor = WorkflowExecutor(
+            workflow=wf, project_path=workspace, auto_approve=True,
+        )
+        _executor_holder["ex"] = executor
         executor.completed_files.add(".factory/chess/board_state.md")
         executor.completed_files.add(".factory/chess/verification.md")
         executor._emit = make_hooked_emit(executor._emit)  # type: ignore[assignment]
         result = await executor.execute()
+    finally:
+        _runner.invoke_agent = _orig_invoke  # type: ignore[assignment]
 
     for nid, output in result.node_outputs.items():
         node = wf.nodes.get(nid)
