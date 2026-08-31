@@ -26,7 +26,7 @@ _client = None
 _api_semaphore = asyncio.Semaphore(5)
 CHESS_MODEL = os.environ.get("CHESS_MODEL", "opus")
 USE_HAIKU_API = os.environ.get("CHESS_USE_HAIKU_API", "").lower() in ("1", "true", "yes")
-HAIKU_MODEL = os.environ.get("CHESS_HAIKU_MODEL", "claude-haiku-4-5-20251001")
+HAIKU_MODEL = os.environ.get("CHESS_HAIKU_MODEL", "claude-haiku-4-5@20251001")
 MODEL_LABEL = "Haiku 4.5 (API)" if USE_HAIKU_API else f"CLI ({CHESS_MODEL})"
 
 _node_reads_by_prompt: dict[str, set[str]] = {}
