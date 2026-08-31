@@ -138,6 +138,7 @@ async def main():
     )
     archive.add(seed_ind)
     ind_configs: dict[str, PipelineConfig] = {seed_ind.id: seed_cfg}
+    ind_prompts: dict[str, dict[str, str]] = {}
     broadcast_eval_result(f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, gen=0, is_best=True)
 
     reflector = OuterLoopReflector(k=3)
@@ -174,7 +175,11 @@ async def main():
             for iid in record_ids:
                 cfg = ind_configs.get(iid)
                 if cfg:
-                    knob_vals[iid] = {k: getattr(cfg, k) for k, _ in KNOB_SPACE if hasattr(cfg, k)}
+                    vals = {k: getattr(cfg, k) for k, _ in KNOB_SPACE if hasattr(cfg, k)}
+                    prompts = ind_prompts.get(iid, {})
+                    for node, prompt in prompts.items():
+                        vals[f"prompt_{node}"] = prompt[:100]
+                    knob_vals[iid] = vals
             try:
                 reflection_report = reflector.reflect(records, gen, knob_values_by_id=knob_vals)
                 parts = []
@@ -358,6 +363,10 @@ async def main():
             inserted = archive.add(ind)
             ind_configs[ind.id] = cfg
             cycle_records[ind.id] = result.to_cycle_record(gen)
+            if mut_detail.get("after"):
+                ind_prompts[ind.id] = {
+                    mut_detail["node"]: mut_detail["after"],
+                }
             gen_candidates.append((label, cfg, result, score))
             if inserted:
                 inserted_labels.add(label)
