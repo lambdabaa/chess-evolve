@@ -130,13 +130,14 @@ class EvalResult:
                     )
             won = result == "win"
             drew = result == "draw"
-            for role in ["tactician", "positionalist", "selector", "verifier"]:
-                steps.append(AgentStep(
-                    order=order, role=role, started_at="",
-                    duration_s=0, cost_usd=None, output_tokens=None,
-                    succeeded=True, node_id=f"game{i}_{role}",
-                ))
-                order += 1
+            if i == 0:
+                for role in ["tactician", "positionalist", "selector", "verifier"]:
+                    steps.append(AgentStep(
+                        order=order, role=role, started_at="",
+                        duration_s=0, cost_usd=None, output_tokens=None,
+                        succeeded=True, node_id=f"game{i}_{role}",
+                    ))
+                    order += 1
             for b, detail in enumerate(blunder_details):
                 steps.append(AgentStep(
                     order=order, role="blunder", started_at="",
