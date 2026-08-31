@@ -123,11 +123,12 @@ async def _sdk_invoke_agent(
     **kwargs: object,
 ) -> tuple[str, int]:
     """Drop-in for factory's invoke_agent using Haiku API or CLI."""
-    system = f"You are a {role}. Be concise — max 100 words."
+    system = f"You are a chess {role}. Be concise — max 100 words."
     if role == "strategist":
         system += (
             "\n\nCRITICAL: Your ENTIRE response "
-            "must be exactly one UCI move. Format: source square + destination square "
+            "must be exactly one UCI move for YOUR color (check the board). "
+            "Format: source square + destination square "
             "(4 chars like e2e4) or with promotion piece (5 chars like e7e8q). "
             "Always include the source square. No explanation. Just the move."
         )
