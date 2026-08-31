@@ -1,5 +1,7 @@
 # chess-evolve
 
+[![CI](https://github.com/lambdabaa/chess-evolve/actions/workflows/ci.yml/badge.svg)](https://github.com/lambdabaa/chess-evolve/actions/workflows/ci.yml)
+
 Teach an LLM to play chess via evolutionary prompt optimization, powered by [remote-factory](https://github.com/akashgit/remote-factory).
 
 ![Live dashboard showing score trends, mutation distribution, and parallel games](docs/screenshot.png)
