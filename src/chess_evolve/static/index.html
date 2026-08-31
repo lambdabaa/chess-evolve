@@ -299,7 +299,7 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
 <div id="log-panel"></div>
 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
   <div style="flex:2; min-width:400px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(sum of cp while above -500cp + 200K*win + 100K*draw)</span></h2>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(sum of (cp+500)/1000 while above -5.0 + 200*win + 100*draw)</span></h2>
     <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
@@ -535,12 +535,11 @@ function _updateUI() {
     const avgCp = ec.length ? Math.round(ec.reduce((a,b) => a+b, 0) / ec.length) : 0;
     let total = 0;
     for (const cp of ec) {
-      if (cp >= -500) total += cp + 500;
+      if (cp >= -500) total += (cp + 500) / 1000;
       else break;
     }
-    const composite = total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);
-    const fmtScore = v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : `${Math.round(v)}`;
-    const scoreStr = ` ${fmtScore(composite)}`;
+    const composite = total + 200 * (g.result === 'win' ? 1 : 0) + 100 * (g.result === 'draw' ? 1 : 0);
+    const scoreStr = ` ${composite.toFixed(1)}`;
     const legalPct = g.node_outputs?._legal_pct || '';
     const legalStr = legalPct ? ` legal:${legalPct}%` : '';
     const resultText = g.result
@@ -649,10 +648,10 @@ function computeGameScore(g) {
   const ec = g.eval_curve || [];
   let total = 0;
   for (const cp of ec) {
-    if (cp >= -500) total += cp + 500;
+    if (cp >= -500) total += (cp + 500) / 1000;
     else break;
   }
-  return total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);
+  return total + 200 * (g.result === 'win' ? 1 : 0) + 100 * (g.result === 'draw' ? 1 : 0);
 }
 
 function renderMd(text) {
@@ -765,7 +764,7 @@ function updateBestGames() {
   bestGamesPanel.innerHTML = html;
   try {
     const bl = window._bestBaseline || 0;
-    renderBestGameCard('replay-best', bestScore, 'Best Survival', bl);
+    renderBestGameCard('replay-best', bestScore, 'Best Game', bl);
   } catch(e) {
     console.error('Best games render error:', e);
     bestGamesPanel.innerHTML += `<pre style="color:red">${e.message}\n${e.stack}</pre>`;
@@ -1015,8 +1014,8 @@ function updateEloChart() {
   const genCounts = allGens.map(g => chartEntries.filter(e => e.gen === g).length);
   const expectedCount = allGens.length > 1 ? Math.max(...genCounts.slice(0, -1)) : genCounts[0] || 5;
   const gens = genCounts[genCounts.length - 1] < expectedCount ? allGens.slice(0, -1) : allGens;
-  // Cap at 100K for chart — wins (200K) and draws (100K) would squish the loss range
-  const getCp = e => Math.min(e.composite ?? e.score ?? 0, 99999);
+  // Cap at 99 for chart — wins (200) and draws (100) would squish the loss range
+  const getCp = e => Math.min(e.composite ?? e.score ?? 0, 99);
   const bestPerGen = gens.map(g => {
     const ge = chartEntries.filter(e => e.gen === g);
     return Math.max(...ge.map(getCp));

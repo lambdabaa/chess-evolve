@@ -96,18 +96,18 @@ class EvalResult:
 
     @property
     def composite_score(self) -> float:
-        # Sum of (cp + 500) while above -500cp — each move contributes
-        # how far above the cutoff it is (e.g., -450cp → +50, +100cp → +600)
+        # Sum of (cp + 500)/1000 while above -500cp.
+        # Each move contributes how far above cutoff in pawn units.
+        # e.g., -450cp → 0.05, +100cp → 0.6, equal → 0.5
         threshold = -500
         total = 0.0
         for g in self.games:
             for cp in g.get("eval_curve", []):
                 if cp >= threshold:
-                    total += cp - threshold
+                    total += (cp - threshold) / 1000.0
                 else:
                     break
-        # Draws always beat any loss, wins always beat any draw
-        return total + 200_000 * self.wins + 100_000 * self.draws
+        return total + 200 * self.wins + 100 * self.draws
 
     def to_cycle_record(self, gen: int = 0) -> CycleRecord:
         """Build a factory CycleRecord from chess results.
