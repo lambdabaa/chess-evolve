@@ -540,8 +540,10 @@ function _updateUI() {
     const avgCp = ec.length ? Math.round(ec.reduce((a,b) => a+b, 0) / ec.length) : 0;
     const blunders = ec.filter((v,i) => i > 0 && v - ec[i-1] < -200).length;
     const composite = avgCp - 20 * blunders + 8 * g.move_count + 500 * (g.result === 'win' ? 1 : 0) + 200 * (g.result === 'draw' ? 1 : 0);
-    const scoreStr = g.result ? ` score=${composite >= 0 ? '+' : ''}${composite}` : '';
-    const resultText = g.result ? `${g.result.toUpperCase()} (${g.move_count}mv${scoreStr})` : `move ${g.move_count}...`;
+    const scoreStr = ` ${composite >= 0 ? '+' : ''}${composite}`;
+    const resultText = g.result
+      ? `${g.result.toUpperCase()} (${g.move_count}mv${scoreStr})`
+      : `move ${g.move_count}... ${scoreStr}`;
     const lastMove = g.moves.length > 0 ? g.moves[g.moves.length - 1] : '';
     const llmColor = g.llm_white ? 'White' : 'Black';
     const sfColor = g.llm_white ? 'Black' : 'White';
