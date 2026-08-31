@@ -112,7 +112,8 @@ async def main():
     n_loaded = _load_invented_prompts()
 
     header("CHESS PIPELINE EVOLUTION -- adaptive loop")
-    print(f"\n  {WHITE}Model:{RESET}       haiku")
+    from chess_evolve.engine import MODEL_LABEL
+    print(f"\n  {WHITE}Model:{RESET}       {MODEL_LABEL}")
     print(f"  {WHITE}Knobs:{RESET}       {len(KNOB_SPACE)}")
     if n_loaded:
         print(f"  {CYAN}Loaded:{RESET}      {n_loaded} invented prompts from recording")

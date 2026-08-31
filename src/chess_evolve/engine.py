@@ -26,7 +26,9 @@ from chess_evolve.prompts import (
 _client = None
 _api_semaphore = asyncio.Semaphore(10)
 CHESS_MODEL = os.environ.get("CHESS_MODEL", "opus")
-MODEL_LABEL = "Haiku 4.5"
+USE_HAIKU_API = os.environ.get("CHESS_USE_HAIKU_API", "").lower() in ("1", "true", "yes")
+HAIKU_MODEL = os.environ.get("CHESS_HAIKU_MODEL", "claude-haiku-4-5-20251001")
+MODEL_LABEL = "Haiku 4.5 (API)" if USE_HAIKU_API else f"CLI ({CHESS_MODEL})"
 
 _node_reads_by_prompt: dict[str, set[str]] = {}
 
@@ -39,7 +41,27 @@ def _get_client():
     return _client
 
 
-async def _api_call(
+async def _haiku_api_call(
+    system_prompt: str, user_msg: str, max_tokens: int = 200,
+) -> str:
+    """Call Haiku directly via Vertex API."""
+    try:
+        client = _get_client()
+        response = await asyncio.wait_for(
+            client.messages.create(
+                model=HAIKU_MODEL,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_msg}],
+            ),
+            timeout=60.0,
+        )
+        return response.content[0].text.strip() if response.content else ""
+    except Exception:
+        return ""
+
+
+async def _cli_call(
     system_prompt: str, user_msg: str, max_tokens: int = 200,
 ) -> str:
     """Call LLM via claude CLI."""
@@ -63,6 +85,15 @@ async def _api_call(
         return ""
     except Exception:
         return ""
+
+
+async def _api_call(
+    system_prompt: str, user_msg: str, max_tokens: int = 200,
+) -> str:
+    """Route to Haiku API or CLI based on CHESS_USE_HAIKU_API."""
+    if USE_HAIKU_API:
+        return await _haiku_api_call(system_prompt, user_msg, max_tokens)
+    return await _cli_call(system_prompt, user_msg, max_tokens)
 
 
 async def _cli_call_opus(system_prompt: str, user_msg: str, max_tokens: int = 500) -> str:
