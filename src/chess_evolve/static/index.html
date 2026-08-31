@@ -881,6 +881,7 @@ function updateLog() {
       html += `<td colspan="5"></td></tr>`;
     }
     if (!isOpen) continue;
+    if (e.type === 'mutation_info') continue;
 
     const sc = getScore(e);
     const best = sc === maxScore ? 'best' : '';
