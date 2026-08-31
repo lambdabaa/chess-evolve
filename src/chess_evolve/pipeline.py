@@ -28,10 +28,16 @@ from chess_evolve.prompts import (
 )
 
 KNOB_SPACE: list[tuple[str, list]] = [
+    ("analysis_style", ["concise", "detailed", "threat_focused"]),
+    ("tactical_style", ["broad", "mate_focused", "material"]),
+    ("positional_style", ["classical", "dynamic", "prophylactic"]),
+    ("selector_style", ["balanced", "aggressive", "defensive", "calculating"]),
     ("verify_style", ["strict", "standard", "lenient"]),
     ("verify_iterations", list(range(11))),
     ("critique_style", ["devils_advocate", "sanity_check"]),
-    ("opening_hint", ["theory", "principled"]),
+    ("opening_hint", ["principled", "aggressive", "solid", "theory"]),
+    ("middlegame_hint", ["safety_first", "attacking", "positional", "theory"]),
+    ("endgame_hint", ["technical", "aggressive", "defensive", "theory"]),
 ]
 
 _PROMPT_NODES = ["board_analyst", "tactician", "positionalist", "selector", "verifier"]
@@ -41,37 +47,33 @@ _PROMPT_NODES = ["board_analyst", "tactician", "positionalist", "selector", "ver
 class PipelineConfig:
     """Tunable knobs for the chess pipeline."""
 
-    # Fixed
+    # Fixed (not worth searching)
     model: str = "haiku"
     think_tokens: int = 200
-    selector_style: str = "balanced"
-    analysis_style: str = "concise"
     include_analyst: bool = True
     opponent_elo: int = 1320
     endgame_threshold: int = 25
-
-    # Fixed (Opus found these always hurt or don't matter)
     use_game_context: bool = False
     use_game_plan: bool = False
     selector_tokens: int = 10
     verify_loop_target: str = "selector_only"
-    verify_iterations: int = 2
-
-    # Locked winners (from 8000 experiments)
     pipeline_mode: str = "parallel"
-    tactical_style: str = "capture_refutation_gate"
-    positional_style: str = "prophylactic"
-    middlegame_hint: str = "theory+safety_first"
-    endgame_hint: str = "theory+technical+convert"
     board_representation: str = "both"
     game_phase_routing: bool = False
     skip_forced: bool = False
     use_opponent_model: bool = False
 
-    # Tunable
+    # Tunable (searched by factory's outer loop)
+    analysis_style: str = "concise"
+    tactical_style: str = "broad"
+    positional_style: str = "classical"
+    selector_style: str = "balanced"
     verify_style: str = "strict"
+    verify_iterations: int = 2
     critique_style: str = "sanity_check"
     opening_hint: str = "theory"
+    middlegame_hint: str = "safety_first"
+    endgame_hint: str = "technical"
 
     @property
     def label(self) -> str:
