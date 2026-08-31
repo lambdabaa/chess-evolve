@@ -71,6 +71,7 @@ async def _cli_call(
             "--append-system-prompt", system_prompt,
             "--max-turns", "1",
             "--output-format", "text",
+            "--bare",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
