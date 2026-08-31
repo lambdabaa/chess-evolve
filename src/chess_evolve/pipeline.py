@@ -77,42 +77,31 @@ class PipelineConfig:
 
     @property
     def label(self) -> str:
-        parts = [f"mode={self.pipeline_mode}"]
-        if self.tactical_style != "mate_focused":
-            parts.append(f"tact={self.tactical_style}")
-        if self.positional_style != "dynamic":
-            parts.append(f"pos={self.positional_style}")
-        if self.verify_style != "strict":
-            parts.append(f"verify={self.verify_style}")
-        if self.critique_style != "sanity_check":
-            parts.append(f"crit={self.critique_style}")
-        if self.verify_loop_target != "selector_only":
-            parts.append("reanalyze")
-        if self.verify_iterations == 0:
-            parts.append("no-verify")
-        elif self.verify_iterations != 2:
-            parts.append(f"verify-x{self.verify_iterations}")
-        if self.selector_tokens != 10:
-            parts.append(f"tok={self.selector_tokens}")
-        if self.use_game_context:
-            parts.append("ctx")
-        if self.use_game_plan:
-            parts.append("plan")
-        if self.use_opponent_model:
-            parts.append("opp")
-        if self.skip_forced:
-            parts.append("skip")
-        if self.board_representation != "both":
-            parts.append(f"repr={self.board_representation}")
-        if self.game_phase_routing:
-            parts.append("phased")
-        if self.opening_hint != "theory":
-            parts.append(f"open={self.opening_hint}")
-        if self.middlegame_hint != "theory":
-            parts.append(f"mid={self.middlegame_hint}")
-        if self.endgame_hint != "theory":
-            parts.append(f"end={self.endgame_hint}")
-        return " ".join(parts)
+        defaults = PipelineConfig()
+        abbrev = {
+            "analysis_style": "anal",
+            "tactical_style": "tact",
+            "positional_style": "pos",
+            "selector_style": "sel",
+            "verify_style": "verify",
+            "verify_iterations": "verify-x",
+            "critique_style": "crit",
+            "opening_hint": "open",
+            "middlegame_hint": "mid",
+            "endgame_hint": "end",
+        }
+        parts = []
+        for knob_name, short in abbrev.items():
+            val = getattr(self, knob_name)
+            default_val = getattr(defaults, knob_name)
+            if val != default_val:
+                if knob_name == "verify_iterations" and val == 0:
+                    parts.append("no-verify")
+                elif knob_name == "verify_iterations":
+                    parts.append(f"{short}{val}")
+                else:
+                    parts.append(f"{short}={val}")
+        return " ".join(parts) if parts else "seed"
 
     @property
     def full_label(self) -> str:

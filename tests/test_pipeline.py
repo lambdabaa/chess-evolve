@@ -17,7 +17,7 @@ class TestPipelineConfig:
         assert cfg.verify_iterations == 2
 
     def test_label_includes_mode(self, default_config):
-        assert "mode=parallel" in default_config.label
+        assert default_config.label == "seed"
 
     def test_full_label_includes_knobs(self, default_config):
         label = default_config.full_label

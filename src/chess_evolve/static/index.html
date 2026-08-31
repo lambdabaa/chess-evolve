@@ -1144,10 +1144,7 @@ function updateMutationDist() {
     panel.innerHTML = '<div style="font-size:11px;color:#8b949e;">No archive members yet</div>';
     return;
   }
-  const seedTokens = new Set([
-    'mode=parallel', 'tact=broad', 'pos=classical',
-    'mid=safety_first', 'end=technical',
-  ]);
+  const seedTokens = new Set(['seed']);
   let html = `<div style="font-size:10px;color:#8b949e;margin-bottom:4px;">${archiveEntries.length} cells</div>`;
   html += '<div style="font-size:10px;max-height:300px;overflow-y:auto;">';
   for (const e of archiveEntries) {

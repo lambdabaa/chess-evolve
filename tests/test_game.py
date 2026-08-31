@@ -15,19 +15,21 @@ class TestEvalResult:
         ]
         # drops > 200: 30->-200 = -230, -100->-350 = -250
         assert r.blunder_count == 2
-        expected = r.avg_eval - 20 * r.blunder_count + 8 * 30 + 500 * 0 + 200 * 0
+        # length_bonus = 8 * max(30-10, 0) = 160
+        # short_penalty = -50 * max(10-30, 0) = 0 (but losses > 0 check)
+        expected = r.avg_eval - 20 * 2 + 8 * max(30 - 10, 0)
         assert r.composite_score == expected
 
     def test_composite_score_with_win(self):
         r = EvalResult(wins=1, draws=0, losses=0, total_moves=20)
         r.games = [{"eval_curve": [100, 150, 200]}]
-        expected = r.avg_eval - 20 * 0 + 8 * 20 + 500
+        expected = r.avg_eval - 20 * 0 + 8 * max(20 - 10, 0) + 500
         assert r.composite_score == expected
 
     def test_composite_score_with_draw(self):
         r = EvalResult(wins=0, draws=1, losses=0, total_moves=40)
         r.games = [{"eval_curve": [0, 10, -10, 5]}]
-        expected = r.avg_eval - 20 * 0 + 8 * 40 + 200
+        expected = r.avg_eval - 20 * 0 + 8 * max(40 - 10, 0) + 200
         assert r.composite_score == expected
 
     def test_blunder_count(self):
