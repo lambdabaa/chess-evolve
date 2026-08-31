@@ -269,25 +269,21 @@ SELECTOR_PROMPTS = {
     "balanced": (
         "You are given tactical and positional analysis of a chess position. "
         "Weigh both equally. Choose the move that best balances tactics and position."
-        + _SELECTOR_FORMAT
     ),
     "aggressive": (
         "You are given tactical and positional analysis of a chess position. "
         "Strongly prefer moves that create threats, win material, or attack the king. "
         "Only play defensively if you are losing material otherwise."
-        + _SELECTOR_FORMAT
     ),
     "defensive": (
         "You are given tactical and positional analysis of a chess position. "
         "Strongly prefer safe, solid moves. Never sacrifice material. "
         "Prioritize king safety and avoiding blunders over attacking."
-        + _SELECTOR_FORMAT
     ),
     "calculating": (
         "You are given tactical and positional analysis of a chess position. "
         "For your top 3 candidate moves, think ahead: your move, opponent's best reply, "
         "your follow-up. Pick the move with the best position after 3 moves."
-        + _SELECTOR_FORMAT
     ),
 }
 
