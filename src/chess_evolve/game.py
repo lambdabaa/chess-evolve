@@ -100,15 +100,36 @@ class EvalResult:
         return base + 500 * self.wins + 200 * self.draws
 
     def to_cycle_record(self, gen: int = 0) -> CycleRecord:
-        """Build a factory CycleRecord from chess results."""
+        """Build a factory CycleRecord from chess results.
+
+        Includes move history, eval curve, and blunder context so the
+        reflector can see exactly where and why games went wrong.
+        """
         steps = []
         experiments = []
         order = 0
         for i, g in enumerate(self.games):
             curve = g.get("eval_curve", [])
-            blunders = sum(1 for j in range(1, len(curve)) if curve[j] - curve[j-1] < -200)
-            won = g.get("result") == "win"
-            drew = g.get("result") == "draw"
+            moves = g.get("moves", [])
+            result = g.get("result", "loss")
+            move_str = " ".join(
+                f"{m // 2 + 1}.{moves[m]}"
+                + (f" {moves[m+1]}" if m + 1 < len(moves) else "")
+                for m in range(0, len(moves), 2)
+            )
+            blunder_details = []
+            for j in range(1, len(curve)):
+                drop = curve[j] - curve[j - 1]
+                if drop < -200:
+                    move_num = j // 2 + 1
+                    move_text = moves[j] if j < len(moves) else "?"
+                    blunder_details.append(
+                        f"move {move_num} ({move_text}): "
+                        f"{curve[j-1]:+d}cp -> {curve[j]:+d}cp "
+                        f"(drop {drop:+d}cp)"
+                    )
+            won = result == "win"
+            drew = result == "draw"
             for role in ["tactician", "positionalist", "selector", "verifier"]:
                 steps.append(AgentStep(
                     order=order, role=role, started_at="",
@@ -116,17 +137,24 @@ class EvalResult:
                     succeeded=True, node_id=f"game{i}_{role}",
                 ))
                 order += 1
-            for b in range(blunders):
+            for b, detail in enumerate(blunder_details):
                 steps.append(AgentStep(
                     order=order, role="blunder", started_at="",
                     duration_s=0, cost_usd=None, output_tokens=None,
-                    succeeded=False, error=f"blunder #{b+1} (>200cp drop)",
+                    succeeded=False, error=detail,
                     node_id=f"game{i}_blunder{b}",
                 ))
                 order += 1
+            curve_str = ",".join(f"{c:+d}" for c in curve[-10:])
             avg = sum(curve) / len(curve) if curve else 0
+            hypothesis = (
+                f"{g.get('tag', '')} | {result} in {len(moves)} moves | "
+                f"moves: {move_str[:200]} | "
+                f"eval: [{curve_str}] | "
+                f"blunders: {len(blunder_details)}"
+            )
             experiments.append(ExperimentRecord(
-                exp_id=i, hypothesis=g.get("tag", ""),
+                exp_id=i, hypothesis=hypothesis,
                 verdict="keep" if won or drew else "revert",
                 score_before=0, score_after=avg,
                 score_delta=avg, cost_usd=0, duration_s=0,
