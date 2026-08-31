@@ -411,7 +411,12 @@ async def main():
                 f.write(json.dumps({"t": time.monotonic(), **entry}) + "\n")
 
         all_results.extend(gen_candidates)
-        print(f"  {DIM}Gen {gen} in {time.monotonic() - gen_start:.0f}s{RESET}")
+        import resource
+        mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // (1024 * 1024)
+        print(
+            f"  {DIM}Gen {gen} in {time.monotonic() - gen_start:.0f}s"
+            f" | mem={mb}MB | archive={archive.size}{RESET}"
+        )
 
     header("RESULTS")
     best = archive.best()
