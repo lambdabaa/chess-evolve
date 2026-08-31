@@ -539,7 +539,8 @@ function _updateUI() {
       else break;
     }
     const composite = total + 200000 * (g.result === 'win' ? 1 : 0) + 100000 * (g.result === 'draw' ? 1 : 0);
-    const scoreStr = ` ${composite >= 0 ? '+' : ''}${composite}`;
+    const fmtScore = v => v >= 1000 ? `${(v/1000).toFixed(1)}K` : `${Math.round(v)}`;
+    const scoreStr = ` ${fmtScore(composite)}`;
     const legalPct = g.node_outputs?._legal_pct || '';
     const legalStr = legalPct ? ` legal:${legalPct}%` : '';
     const resultText = g.result
@@ -1010,7 +1011,8 @@ function updateEloChart() {
   // Compute best avg eval per generation
   const chartEntries = logEntries.filter(e => e.type !== 'reflection');
   const gens = [...new Set(chartEntries.map(e => e.gen))].sort((a, b) => a - b);
-  const getCp = e => e.composite ?? e.score ?? 0;
+  // Cap at 100K for chart — wins (200K) and draws (100K) would squish the loss range
+  const getCp = e => Math.min(e.composite ?? e.score ?? 0, 99999);
   const bestPerGen = gens.map(g => {
     const ge = chartEntries.filter(e => e.gen === g);
     return Math.max(...ge.map(getCp));
