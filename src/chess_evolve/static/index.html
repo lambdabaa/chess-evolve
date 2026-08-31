@@ -703,7 +703,7 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
       <div class="game-card" style="border-color:#3fb950; margin:0;">
         <div class="game-header">
           <span style="color:#3fb950; font-weight:bold;">${label}</span>
-          <span class="game-result" style="color:#58a6ff;">Gen ${g.gen} | ${g.result.toUpperCase()} (${g.move_count}mv score=${sc >= 0?'+':''}${sc}${baseline ? ` <span style="color:#3fb950;">+${Math.round(sc - baseline)} vs seed</span>` : ''})</span>
+          <span class="game-result" style="color:#58a6ff;">Gen ${g.gen} | ${g.result.toUpperCase()} ${g.move_count}mv score:${sc >= 0?'+':''}${sc} legal:${g.pipeline_runs ? Math.round(100*(g.pipeline_runs - (g.llm_errors||0))/g.pipeline_runs) : '?'}%${baseline ? ` <span style="color:#3fb950;">+${Math.round(sc - baseline)} vs seed</span>` : ''}</span>
         </div>
         <div class="player-label">${topLabel}</div>
         <div style="display:flex; gap:4px; flex-shrink:0;">
