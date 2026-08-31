@@ -376,6 +376,10 @@ async def get_pipeline_move(
     move = None
     if move_file.exists():
         move = _extract_move(move_file.read_text(), board)
+    if move is None:
+        fallback = workspace / ".factory" / "reviews" / "strategist-latest.md"
+        if fallback.exists():
+            move = _extract_move(fallback.read_text(), board)
 
     blunder_file = chess_dir / "blunder_check.md"
     if blunder_file.exists():
