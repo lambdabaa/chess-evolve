@@ -101,6 +101,33 @@ Factory's `compute_features()` automatically extracts MAP-Elites feature dimensi
 | `CycleRecord` | Structured experiment data for reflection |
 | `default_prompt_rewriter` | Opus-powered full prompt rewriting |
 | `default_knob_expander` | Opus-powered knob value invention |
+| `Population.make_individual` | Creates an Individual with auto-computed features |
+| `compute_features` | Extracts MAP-Elites features from a compiled workflow |
+
+#### Integration details
+
+**WorkflowExecutor** runs the compiled DAG but uses `factory.agents.runner.invoke_agent` to call agents. To use your own LLM backend, swap the module attribute before execution:
+```python
+import factory.agents.runner as runner
+runner.invoke_agent = my_custom_invoke  # (role, task, path, **kw) -> (text, code)
+executor = WorkflowExecutor(workflow=wf, project_path=workspace)
+result = await executor.execute()
+move = result.node_outputs["selector"]  # read outputs from memory
+```
+
+**Prompt mutation carry-over**: `apply_random_mutation` stores rewritten prompts in `_prompt_*` knob values on the workflow IR. When rebuilding a Package from config, copy these through so `compile()` preserves them:
+```python
+child_wf, rec = apply_random_mutation(parent_wf, strategy, gen)
+child_pipeline = build_pipeline(child_cfg)
+for k, v in child_wf.knob_values.items():
+    if k.startswith("_prompt_"):
+        child_pipeline.graph.knob_values[k] = v
+        child_pipeline.graph.knob_expandable[k] = child_wf.knob_expandable.get(k, "")
+```
+
+**`default_prompt_rewriter`** is called automatically by `PROMPT_MUTATE`. It spawns Opus via CLI to rewrite an agent's prompt based on reflection hints. No setup needed -- it's the default parameter on `mutate_prompt()`.
+
+**`default_knob_expander`** is called when all knob bounds are exhausted and the knob is marked `expandable=True`. It spawns Opus to invent new values (e.g., a new prompt variant). Also automatic.
 
 ### Wiring the feedback loop
 
