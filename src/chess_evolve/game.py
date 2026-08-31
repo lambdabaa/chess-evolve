@@ -289,6 +289,8 @@ async def play_game(
                     node_outputs.get("selector", "?")[:20]
                     if node_outputs else "?"
                 )
+                if node_outputs:
+                    node_outputs["_selector_move"] = selector_said
                 print(
                     f"  [{game_tag}] move {move_count+1}"
                     f" played={move_uci}"

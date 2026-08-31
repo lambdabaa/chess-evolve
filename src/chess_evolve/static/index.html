@@ -607,6 +607,9 @@ function _updateUI() {
             <div class="player-label ${botClass}">${botLabel}</div>
             ${turnHtml}
             ${pipeHtml}
+            ${g.node_outputs && g.node_outputs._move_source ? `<div style="font-size:9px;padding:2px 4px;margin:2px 0;border-radius:3px;background:${g.node_outputs._move_source === 'pipeline' ? '#1a2e1a' : '#2e1a1a'};color:${g.node_outputs._move_source === 'pipeline' ? '#3fb950' : '#f85149'};">
+              ${g.node_outputs._move_source === 'pipeline' ? '✓' : '✗'} played=${g.moves?.[g.moves.length-2] || '?'} selector=${(g.node_outputs._selector_move || '?')} src=${g.node_outputs._move_source}
+            </div>` : ''}
             <div class="moves">${formatMoves(g.moves)}</div>`}
       </div>`;
   }
