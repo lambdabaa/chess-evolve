@@ -449,7 +449,10 @@ function renderNodeOutputs(outputs) {
   for (const nodeId of sorted) {
     const label = labels[nodeId] || nodeId;
     const color = colors[nodeId] || '#8b949e';
-    let rendered = outputs[nodeId]
+    const raw = Array.isArray(outputs[nodeId])
+      ? outputs[nodeId][outputs[nodeId].length - 1] || ''
+      : outputs[nodeId];
+    let rendered = raw
       .replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\*\*(.+?)\*\*/g, '<b style="color:#c9d1d9;">$1</b>')
       .replace(/\*(.+?)\*/g, '<i>$1</i>')
@@ -774,7 +777,15 @@ evtSource.onmessage = (e) => {
   if (!data.tag) return;
   const prev = games[data.tag];
   if (prev && prev.node_outputs && data.node_outputs) {
-    data.node_outputs = {...prev.node_outputs, ...data.node_outputs};
+    const merged = {...prev.node_outputs};
+    for (const [k, v] of Object.entries(data.node_outputs)) {
+      if (Array.isArray(merged[k]) && Array.isArray(v)) {
+        merged[k] = [...merged[k], ...v.slice(merged[k].length)];
+      } else {
+        merged[k] = v;
+      }
+    }
+    data.node_outputs = merged;
   }
   games[data.tag] = data;
   if (data.result && !finishedGames.find(g => g.tag === data.tag)) {

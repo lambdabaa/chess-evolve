@@ -145,8 +145,14 @@ class EvalResult:
                 if blunder_details else "none"
             )
             agent_out = g.get("agent_outputs", {})
-            selector_out = agent_out.get("selector", "")
-            verifier_out = agent_out.get("verifier", "")
+            sel_list = agent_out.get("selector", [])
+            ver_list = agent_out.get("verifier", [])
+            selector_out = " | ".join(
+                sel_list[-3:] if isinstance(sel_list, list) else [sel_list]
+            )
+            verifier_out = " | ".join(
+                ver_list[-3:] if isinstance(ver_list, list) else [ver_list]
+            )
             hypothesis = (
                 f"{g.get('tag', '')} | {result} in {len(moves)} moves | "
                 f"moves: {move_str[:200]} | "
@@ -207,7 +213,7 @@ async def play_game(
     game_moves: list[str] = []
     eval_curve: list[int] = []
     current_plan: str = ""
-    all_node_outputs: dict[str, str] = {}
+    all_node_outputs: dict[str, list[str]] = {}
 
     try:
         while not board.is_game_over() and move_count < MAX_MOVES:
@@ -268,7 +274,8 @@ async def play_game(
                 pipeline_runs += 1
 
                 if node_outputs:
-                    all_node_outputs.update(node_outputs)
+                    for nid, text in node_outputs.items():
+                        all_node_outputs.setdefault(nid, []).append(text)
                 if move_uci is None:
                     llm_errors += 1
                     move = random.choice(legal)
