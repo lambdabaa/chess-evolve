@@ -338,7 +338,6 @@ async def get_pipeline_move(
                     stockfish_elo, move_count=move_count,
                     gen=gen, config=config_label,
                     whose_turn="llm", active_node=active,
-                    node_outputs=node_outputs,
                     eval_curve=eval_curve, full_config=full_config_label,
                 )
             elif event_type == "node.completed":
