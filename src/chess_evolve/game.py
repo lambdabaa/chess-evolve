@@ -96,12 +96,15 @@ class EvalResult:
 
     @property
     def composite_score(self) -> float:
-        # Penalize short losses: games under 10 moves get a length penalty
-        min_moves = 10
-        length_bonus = 8 * max(self.total_moves - min_moves, 0)
-        short_penalty = -50 * max(min_moves - self.total_moves, 0) if self.losses > 0 else 0
-        base = self.avg_eval - 20 * self.blunder_count + length_bonus + short_penalty
-        return base + 500 * self.wins + 200 * self.draws
+        # Count moves where eval stays above -500cp (not lost)
+        survival = 0
+        for g in self.games:
+            for cp in g.get("eval_curve", []):
+                if cp >= -500:
+                    survival += 1
+                else:
+                    break
+        return survival + 200 * self.wins + 100 * self.draws
 
     def to_cycle_record(self, gen: int = 0) -> CycleRecord:
         """Build a factory CycleRecord from chess results.

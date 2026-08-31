@@ -299,7 +299,7 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
 <div id="log-panel"></div>
 <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
   <div style="flex:2; min-width:400px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(avg_cp - 20*blun + 8*max(mv-10,0) - 50*max(10-mv,0) + 500*W + 200*D)</span></h2>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Composite Score by Generation <span style="color:#8b949e; font-weight:normal; font-size:11px;">(moves above -5.0 eval + 200*win + 100*draw)</span></h2>
     <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
@@ -533,12 +533,12 @@ function _updateUI() {
     const resultClass = g.result || 'playing';
     const ec = g.eval_curve || [];
     const avgCp = ec.length ? Math.round(ec.reduce((a,b) => a+b, 0) / ec.length) : 0;
-    const blunders = ec.filter((v,i) => i > 0 && v - ec[i-1] < -200).length;
-    const isLoss = g.result === 'loss';
-    const minMoves = 10;
-    const lengthBonus = 8 * Math.max(g.move_count - minMoves, 0);
-    const shortPenalty = isLoss ? -50 * Math.max(minMoves - g.move_count, 0) : 0;
-    const composite = avgCp - 20 * blunders + lengthBonus + shortPenalty + 500 * (g.result === 'win' ? 1 : 0) + 200 * (g.result === 'draw' ? 1 : 0);
+    let survival = 0;
+    for (const cp of ec) {
+      if (cp >= -500) survival++;
+      else break;
+    }
+    const composite = survival + 200 * (g.result === 'win' ? 1 : 0) + 100 * (g.result === 'draw' ? 1 : 0);
     const scoreStr = ` ${composite >= 0 ? '+' : ''}${composite}`;
     const legalPct = g.node_outputs?._legal_pct || '';
     const legalStr = legalPct ? ` legal:${legalPct}%` : '';
@@ -646,9 +646,12 @@ const replayTimers = {};
 
 function computeGameScore(g) {
   const ec = g.eval_curve || [];
-  const avg = ec.length ? ec.reduce((a,b) => a+b, 0) / ec.length : 0;
-  const blunders = ec.filter((v,i) => i > 0 && v - ec[i-1] < -200).length;
-  return Math.round(avg - 20 * blunders + 8 * g.move_count);
+  let survival = 0;
+  for (const cp of ec) {
+    if (cp >= -500) survival++;
+    else break;
+  }
+  return survival + 200 * (g.result === 'win' ? 1 : 0) + 100 * (g.result === 'draw' ? 1 : 0);
 }
 
 function renderMd(text) {
@@ -750,30 +753,18 @@ function updateBestGames() {
   if (finishedGames.length === 0) { bestGamesPanel.innerHTML = '<div style="color:#8b949e;padding:8px;">Waiting for finished games...</div>'; return; }
   const scored = finishedGames.map(g => ({...g, composite: computeGameScore(g)}));
   const bestScore = scored.reduce((a, b) => a.composite > b.composite ? a : b);
-  const longest = scored.reduce((a, b) => (b.moves || []).length > (a.moves || []).length ? b : a);
-  // Only re-render if best games changed
-  if (bestScore.tag === bestGameTag && longest.tag === longestGameTag) return;
+  if (bestScore.tag === bestGameTag) return;
   bestGameTag = bestScore.tag;
-  longestGameTag = longest.tag;
-  // Clear old replays
   if (replayTimers['replay-best']) { clearInterval(replayTimers['replay-best']); delete replayTimers['replay-best']; }
-  if (replayTimers['replay-longest']) { clearInterval(replayTimers['replay-longest']); delete replayTimers['replay-longest']; }
 
   let html = `<div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:16px;">`;
-  html += `<h2 style="color:#58a6ff; font-size:14px; margin-bottom:12px;">Best Games</h2>`;
-  html += `<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:stretch;">`;
-  html += `<div id="replay-best" style="flex:1; min-width:400px;"></div>`;
-  if (longest.tag !== bestScore.tag) {
-    html += `<div id="replay-longest" style="flex:1; min-width:400px;"></div>`;
-  }
-  html += `</div></div>`;
+  html += `<h2 style="color:#58a6ff; font-size:14px; margin-bottom:12px;">Best Game</h2>`;
+  html += `<div id="replay-best"></div>`;
+  html += `</div>`;
   bestGamesPanel.innerHTML = html;
   try {
     const bl = window._bestBaseline || 0;
-    renderBestGameCard('replay-best', bestScore, 'Highest Score', bl);
-    if (longest.tag !== bestScore.tag) {
-      renderBestGameCard('replay-longest', longest, 'Longest Game', bl);
-    }
+    renderBestGameCard('replay-best', bestScore, 'Best Survival', bl);
   } catch(e) {
     console.error('Best games render error:', e);
     bestGamesPanel.innerHTML += `<pre style="color:red">${e.message}\n${e.stack}</pre>`;
