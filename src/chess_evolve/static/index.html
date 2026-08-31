@@ -449,10 +449,16 @@ function renderNodeOutputs(outputs) {
   for (const nodeId of sorted) {
     const label = labels[nodeId] || nodeId;
     const color = colors[nodeId] || '#8b949e';
-    const escaped = outputs[nodeId].replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    let rendered = outputs[nodeId]
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<b style="color:#c9d1d9;">$1</b>')
+      .replace(/\*(.+?)\*/g, '<i>$1</i>')
+      .replace(/`([^`]+)`/g, '<code style="background:#21262d;padding:1px 3px;border-radius:2px;color:#d29922;">$1</code>')
+      .replace(/^[-•] (.+)$/gm, '<span style="color:#484f58;">  •</span> $1')
+      .replace(/^(\d+)\. (.+)$/gm, '<span style="color:#484f58;">$1.</span> $2');
     html += `<div style="margin-bottom:6px;">`;
     html += `<span style="color:${color};font-weight:bold;font-size:9px;text-transform:uppercase;">${label}</span>`;
-    html += `<div style="color:#8b949e;white-space:pre-wrap;word-break:break-word;">${escaped}</div>`;
+    html += `<div style="color:#8b949e;white-space:pre-wrap;word-break:break-word;">${rendered}</div>`;
     html += `</div>`;
   }
   html += '</div>';
