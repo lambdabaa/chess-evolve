@@ -163,6 +163,12 @@ class EvalResult:
                 hypothesis += f" | selector: {selector_out}"
             if verifier_out:
                 hypothesis += f" | verifier: {verifier_out}"
+            illegals = g.get("illegal_moves", [])
+            if illegals:
+                hypothesis += (
+                    f" | ILLEGAL MOVES ({len(illegals)}): "
+                    + "; ".join(illegals[:3])
+                )
             experiments.append(ExperimentRecord(
                 exp_id=i, hypothesis=hypothesis,
                 verdict="keep" if won or drew else "revert",
@@ -214,6 +220,7 @@ async def play_game(
     eval_curve: list[int] = []
     current_plan: str = ""
     all_node_outputs: dict[str, list[str]] = {}
+    illegal_moves: list[str] = []
 
     try:
         while not board.is_game_over() and move_count < MAX_MOVES:
@@ -278,17 +285,20 @@ async def play_game(
                     node_outputs.get("_move_source", "none")
                     if node_outputs else "none"
                 )
-                if move_uci is None:
-                    llm_errors += 1
-                    move = random.choice(legal)
-                    move_uci = move.uci()
-                    source = "random"
-
                 import sys
                 selector_said = (
                     node_outputs.get("selector", "?")[:20]
                     if node_outputs else "?"
                 )
+                if move_uci is None:
+                    llm_errors += 1
+                    illegal_moves.append(
+                        f"move {move_count+1}: selector={selector_said}"
+                        f" (not legal)"
+                    )
+                    move = random.choice(legal)
+                    move_uci = move.uci()
+                    source = "random"
                 if node_outputs:
                     node_outputs["_selector_move"] = selector_said
                 print(
@@ -392,6 +402,7 @@ async def play_game(
         "move_list": game_moves,
         "eval_curve": eval_curve,
         "agent_outputs": dict(all_node_outputs),
+        "illegal_moves": illegal_moves,
     }
 
 
