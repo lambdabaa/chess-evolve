@@ -284,13 +284,18 @@ async def play_game(
                     move_uci = move.uci()
                     source = "random"
 
-                if source != "pipeline":
-                    import sys
-                    print(
-                        f"  [{game_tag}] move {move_count+1}"
-                        f" {move_uci}: source={source}",
-                        file=sys.stderr, flush=True,
-                    )
+                import sys
+                selector_said = (
+                    node_outputs.get("selector", "?")[:20]
+                    if node_outputs else "?"
+                )
+                print(
+                    f"  [{game_tag}] move {move_count+1}"
+                    f" played={move_uci}"
+                    f" selector={selector_said}"
+                    f" source={source}",
+                    file=sys.stderr, flush=True,
+                )
 
                 board.push_uci(move_uci)
 
