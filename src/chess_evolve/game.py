@@ -110,7 +110,7 @@ class EvalResult:
         order = 0
         for i, g in enumerate(self.games):
             curve = g.get("eval_curve", [])
-            moves = g.get("moves", [])
+            moves = g.get("move_list", [])
             result = g.get("result", "loss")
             move_str = " ".join(
                 f"{m // 2 + 1}.{moves[m]}"
