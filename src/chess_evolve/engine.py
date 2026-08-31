@@ -374,17 +374,6 @@ async def get_pipeline_move(
                             fpath.write_text(output)
         return _hooked_emit
 
-    # Signal new pipeline run — clears previous agent outputs in UI
-    if game_tag:
-        broadcast_game_state(
-            game_tag, board, game_moves or [], llm_white,
-            stockfish_elo, move_count=move_count,
-            gen=gen, config=config_label,
-            whose_turn="llm", active_node="starting",
-            node_outputs={},
-            eval_curve=eval_curve, full_config=full_config_label,
-        )
-
     import factory.agents.runner as _runner
     _orig_invoke = _runner.invoke_agent
     _runner.invoke_agent = _sdk_invoke_agent  # type: ignore[assignment]
