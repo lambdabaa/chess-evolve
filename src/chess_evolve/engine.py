@@ -341,6 +341,18 @@ async def get_pipeline_move(
                 if ex and event.node_id in ex.result.node_outputs:
                     output = ex.result.node_outputs[event.node_id]
                     node_outputs[event.node_id] = output[:500]
+                    broadcast_game_state(
+                        game_tag, board, game_moves or [], llm_white,
+                        stockfish_elo, move_count=move_count,
+                        gen=gen, config=config_label,
+                        whose_turn="llm",
+                        active_node=NODE_NAME_MAP.get(
+                            event.node_id, event.node_id,
+                        ),
+                        node_outputs=node_outputs,
+                        eval_curve=eval_curve,
+                        full_config=full_config_label,
+                    )
                     node_def = wf.nodes.get(event.node_id)
                     if node_def and node_def.writes and output:
                         for wpath in node_def.writes:

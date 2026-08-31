@@ -566,9 +566,9 @@ function updateUI() {
         ${g.node_outputs && Object.keys(g.node_outputs).length > 0
           ? `<div style="margin-top:4px;">
               <span style="font-size:9px;color:#58a6ff;cursor:pointer;"
-                onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-                ▸ agent outputs</span>
-              <div style="display:none;">${renderNodeOutputs(g.node_outputs)}</div>
+                onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▸ agent outputs':'▾ agent outputs'">
+                ${g.result ? '▸ agent outputs' : '▾ agent outputs'}</span>
+              <div style="display:${g.result ? 'none' : 'block'};">${renderNodeOutputs(g.node_outputs)}</div>
             </div>`
           : ''}
       </div>`;
