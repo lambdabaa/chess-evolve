@@ -197,6 +197,7 @@ async def play_game(
     game_moves: list[str] = []
     eval_curve: list[int] = []
     current_plan: str = ""
+    all_node_outputs: dict[str, str] = {}
 
     try:
         while not board.is_game_over() and move_count < MAX_MOVES:
@@ -256,6 +257,8 @@ async def play_game(
                     move_uci = None
                 pipeline_runs += 1
 
+                if node_outputs:
+                    all_node_outputs.update(node_outputs)
                 if move_uci is None:
                     llm_errors += 1
                     move = random.choice(legal)
@@ -326,6 +329,7 @@ async def play_game(
             cfg.opponent_elo, result=result_str, move_count=move_count,
             gen=gen, config=cfg.label,
             eval_curve=eval_curve, full_config=cfg.full_label,
+            node_outputs=all_node_outputs,
         )
     finally:
         engine.quit()
