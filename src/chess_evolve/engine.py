@@ -418,19 +418,19 @@ async def get_pipeline_move(
             move_source = "pipeline"
         else:
             print(
-                f"  [{move_tag}] PARSE_FAIL selector={selector_output!r}",
+                f"  [{move_tag}] PARSE_FAIL"
+                f" selector={selector_output[:80]!r}",
                 file=sys.stderr, flush=True,
             )
-            if move:
-                move_source = "fallback"
 
-    blunder_file = chess_dir / "blunder_check.md"
-    if blunder_file.exists():
-        blunder_text = blunder_file.read_text().strip()
-        node_outputs["blunder_check"] = blunder_text[:500]
-        alt_move = _extract_move(blunder_text, board)
-        if alt_move and alt_move != move and "blunder" in blunder_text.lower():
-            node_outputs["blunder_check"] += f" [OVERRIDE: {move} -> {alt_move}]"
+    verifier_output = result.node_outputs.get("verifier", "")
+    if verifier_output and move:
+        alt_move = _extract_move(verifier_output, board)
+        if (alt_move and alt_move != move
+                and "blunder" in verifier_output.lower()):
+            node_outputs["blunder_override"] = (
+                f"{move} -> {alt_move}"
+            )
             move = alt_move
             move_source = "blunder_override"
 
