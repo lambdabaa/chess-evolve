@@ -418,8 +418,8 @@ function formatCardTooltip(g) {
   if (logEntry && logEntry.mutation.after) {
     const m = logEntry.mutation;
     return `PROMPT MUTATION on ${m.node}\n\n`
-      + `Before:\n${(m.before || '').substring(0, 200)}\n\n`
-      + `After:\n${(m.after || '').substring(0, 200)}`;
+      + `Before:\n${m.before || ''}\n\n`
+      + `After:\n${m.after || ''}`;
   }
   return formatTooltip(g);
 }
@@ -877,8 +877,8 @@ function updateLog() {
     html += `<tr class="${best}" data-log-gen="${e.gen}">`;
     html += `<td></td>`;
     if (e.mutation && e.mutation.operator === 'prompt_mutate') {
-      const before = (e.mutation.before || '').substring(0, 80);
-      const after = (e.mutation.after || '').substring(0, 80);
+      const before = e.mutation.before || '';
+      const after = e.mutation.after || '';
       const tip = `Node: ${e.mutation.node}\nBefore: ${before}...\nAfter: ${after}...`;
       html += `<td style="cursor:help;" title="${tip.replace(/"/g, '&quot;')}">${e.label} 📝</td>`;
     } else {
