@@ -1144,18 +1144,30 @@ function updateMutationDist() {
     panel.innerHTML = '<div style="font-size:11px;color:#8b949e;">No archive members yet</div>';
     return;
   }
+  const seedTokens = new Set([
+    'mode=parallel', 'tact=broad', 'pos=classical',
+    'mid=safety_first', 'end=technical',
+  ]);
   let html = `<div style="font-size:10px;color:#8b949e;margin-bottom:4px;">${archiveEntries.length} cells</div>`;
   html += '<div style="font-size:10px;max-height:300px;overflow-y:auto;">';
   for (const e of archiveEntries) {
     const sc = Math.round(e.score ?? 0);
     const color = sc >= 0 ? '#3fb950' : sc > -100 ? '#d29922' : '#f85149';
-    // Show the mutation that created this individual
-    const label = (e.label || '').replace(/^Gen \d+\.\d+: /, '');
-    const isPrompt = label.includes('Mutated prompt');
-    const labelColor = isPrompt ? '#bc8cff' : '#d29922';
-    const displayLabel = label || 'seed';
+    // Show all config tokens that differ from seed
+    const tokens = (e.config || '').split(' ');
+    const diffs = tokens.filter(t => !seedTokens.has(t) && t.includes('='));
+    const extras = tokens.filter(t => !t.includes('=') && t !== '');
+    const isPrompt = (e.label || '').includes('Mutated prompt');
+    const parts = [];
+    for (const d of diffs) parts.push(`<span style="color:#d29922">${d}</span>`);
+    for (const x of extras) parts.push(`<span style="color:#d29922">${x}</span>`);
+    if (isPrompt) {
+      const node = (e.label || '').match(/on (\w+)/)?.[1] || '?';
+      parts.push(`<span style="color:#bc8cff">prompt:${node}</span>`);
+    }
+    const displayLabel = parts.length > 0 ? parts.join(' ') : '<span style="color:#484f58">seed</span>';
     html += `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #21262d;gap:8px;">`;
-    html += `<span style="color:${labelColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayLabel}</span>`;
+    html += `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayLabel}</span>`;
     html += `<span style="color:${color};font-weight:bold;min-width:40px;text-align:right;flex-shrink:0;">${sc >= 0 ? '+' : ''}${sc}</span>`;
     html += `</div>`;
   }
