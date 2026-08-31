@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 import random
@@ -247,71 +248,82 @@ async def main():
         if stalled and hasattr(strategy, "on_plateau"):
             strategy.on_plateau()
 
-        candidates: list[tuple[str, PipelineConfig, object, int]] = []
-        for c in range(CANDIDATES_PER_GEN):
-            parent = archive.sample_parent(tournament_size=5, rank_weighted=True)
+        async def mutate_and_eval(c: int):
+            """Mutate a parent and immediately evaluate."""
+            parent = archive.sample_parent(
+                tournament_size=5, rank_weighted=True,
+            )
             if parent is None:
-                continue
+                return None
             parent_cfg = ind_configs.get(parent.id, seed_cfg)
             parent_wf = build_pipeline(parent_cfg).compile()
 
-            result = apply_random_mutation(
+            mut = apply_random_mutation(
                 parent_wf, strategy, gen,
                 reflection_report=reflection_report,
             )
-            if result is None:
-                continue
-            child_wf, rec = result
+            if mut is None:
+                return None
+            child_wf, rec = mut
 
             def _coerce_back(k, v):
                 orig = getattr(parent_cfg, k, None)
                 if isinstance(orig, bool):
-                    return v == "True" if isinstance(v, str) else bool(v)
+                    return (
+                        v == "True" if isinstance(v, str)
+                        else bool(v)
+                    )
                 if isinstance(orig, int):
                     return int(v) if not isinstance(v, int) else v
                 return v
 
-            overrides = {k: _coerce_back(k, v) for k, v in child_wf.knob_values.items()
-                         if hasattr(parent_cfg, k) and getattr(parent_cfg, k) != _coerce_back(k, v)}
+            overrides = {
+                k: _coerce_back(k, v)
+                for k, v in child_wf.knob_values.items()
+                if hasattr(parent_cfg, k)
+                and getattr(parent_cfg, k) != _coerce_back(k, v)
+            }
             if overrides:
                 child_cfg = dataclasses.replace(parent_cfg, **overrides)
-                desc = " + ".join(f"{k}={v}" for k, v in overrides.items())
+                desc = " + ".join(
+                    f"{k}={v}" for k, v in overrides.items()
+                )
             else:
                 child_cfg = parent_cfg
                 desc = rec.rationale or "no-op"
             child_pipeline = build_pipeline(child_cfg)
-            # Carry over _prompt_* knobs so compile() applies them to nodes
             for k, v in child_wf.knob_values.items():
                 if k.startswith("_prompt_"):
                     child_pipeline.graph.knob_values[k] = v
-                    child_pipeline.graph.knob_expandable[k] = child_wf.knob_expandable.get(k, "")
+                    child_pipeline.graph.knob_expandable[k] = (
+                        child_wf.knob_expandable.get(k, "")
+                    )
             label = f"Gen {gen}.{c+1}: {desc}"
-            candidates.append((label, child_cfg, child_pipeline, GAMES_PER_EVAL))
             print(f"  {YELLOW}> {label}{RESET}")
-
-        # Step 3: Evaluate
-        print(f"\n  {DIM}Evaluating {len(candidates)} in parallel...{RESET}\n")
-
-        async def eval_one(label, cfg, pipeline, gen_num, n_games=1):
-            t0 = time.monotonic()
             result = await evaluate_pipeline(
-                pipeline, cfg, n_games=n_games, eval_tag=label, gen=gen_num,
+                child_pipeline, child_cfg,
+                n_games=GAMES_PER_EVAL, eval_tag=label, gen=gen,
             )
-            return label, cfg, pipeline, result, time.monotonic() - t0
+            return label, child_cfg, child_pipeline, result
 
-        import asyncio
-        gen_start = time.monotonic()
-        eval_results = await asyncio.gather(
-            *(eval_one(lbl, c, p, gen, ng) for lbl, c, p, ng in candidates)
-        )
-
-        # Step 4: Update archive
+        # Step 3+4: Mutate, evaluate, and update archive as results arrive
         gen_candidates = []
         inserted_labels: set[str] = set()
         prev_best = best_score
-        for label, cfg, pipeline, result, elapsed in eval_results:
+        gen_start = time.monotonic()
+        tasks = [
+            asyncio.create_task(mutate_and_eval(c))
+            for c in range(CANDIDATES_PER_GEN)
+        ]
+        for coro in asyncio.as_completed(tasks):
+            entry = await coro
+            if entry is None:
+                continue
+            label, cfg, pipeline, result = entry
             score = result.composite_score
-            ind = Population.make_individual(pipeline.compile(), generation=gen, score=score)
+            ind = Population.make_individual(
+                pipeline.compile(), generation=gen, score=score,
+            )
             inserted = archive.add(ind)
             ind_configs[ind.id] = cfg
             cycle_records[ind.id] = result.to_cycle_record(gen)
@@ -319,9 +331,17 @@ async def main():
             if inserted:
                 inserted_labels.add(label)
             marker = f" {GREEN}-> archive{RESET}" if inserted else ""
-            print(f"  {WHITE}{label}:{RESET} {result.win_rate} score={score:+.0f} "
-                  f"(avg={result.avg_eval:+.0f}cp blun={result.blunder_count} "
-                  f"mv={result.total_moves}){marker}")
+            print(
+                f"  {WHITE}{label}:{RESET} {result.win_rate}"
+                f" score={score:+.0f}"
+                f" (avg={result.avg_eval:+.0f}cp"
+                f" blun={result.blunder_count}"
+                f" mv={result.total_moves}){marker}"
+            )
+            broadcast_eval_result(
+                label, cfg, result, gen=gen,
+                is_best=False, in_archive=(label in inserted_labels),
+            )
 
         new_score = archive.best().score if archive.best() else 0
         score_trajectory.append(new_score)
@@ -329,13 +349,6 @@ async def main():
             print(
                 f"\n  {GREEN}NEW BEST: score={new_score:+.0f}"
                 f" (archive: {archive.size} cells){RESET}"
-            )
-
-        for label, cfg, result, score in gen_candidates:
-            broadcast_eval_result(
-                label, cfg, result, gen=gen,
-                is_best=(score == new_score and new_score > prev_best),
-                in_archive=(label in inserted_labels),
             )
 
         # Broadcast current archive population
