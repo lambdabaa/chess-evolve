@@ -408,34 +408,19 @@ async def get_pipeline_move(
                     file=sys.stderr, flush=True,
                 )
 
-    move_file = chess_dir / "move.md"
+    # Read move directly from executor's in-memory output (no filesystem)
     move = None
     move_source = "none"
-    if not move_file.exists():
-        print(
-            f"  [{move_tag}] move.md MISSING after exec",
-            file=sys.stderr, flush=True,
-        )
-    if move_file.exists():
-        raw = move_file.read_text().strip()
-        move = _extract_move(raw, board)
+    selector_output = result.node_outputs.get("selector", "")
+    if selector_output:
+        move = _extract_move(selector_output, board)
         if move:
             move_source = "pipeline"
-        elif raw:
+        else:
             print(
-                f"  [PARSE_FAIL] move.md={raw!r}",
+                f"  [{move_tag}] PARSE_FAIL selector={selector_output!r}",
                 file=sys.stderr, flush=True,
             )
-    if move is None:
-        fallback = workspace / ".factory" / "reviews" / "strategist-latest.md"
-        if fallback.exists():
-            raw_fb = fallback.read_text().strip()
-            move = _extract_move(raw_fb, board)
-            if move:
-                print(
-                    f"  [PARSE_FAIL] used fallback={raw_fb!r}",
-                    file=sys.stderr, flush=True,
-                )
             if move:
                 move_source = "fallback"
 
