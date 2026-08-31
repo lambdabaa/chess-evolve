@@ -221,12 +221,16 @@ async def main():
                     "You are a chess coach analyzing an AI's games. "
                     "Be specific about moves and positions. "
                     "3-4 sentences.",
-                    f"Results (top 20 by score):\n{history}\n\n"
+                    f"SCORING: Each variant is scored by the number "
+                    f"of moves where eval stays above -500cp "
+                    f"(game ends when it dips below). "
+                    f"Draws add 100, wins add 200.\n\n"
+                    f"{history}\n\n"
                     f"Archive: {archive.size} cells, "
                     f"best={best_score:+.0f}\n\n"
-                    f"What specific chess mistakes keep recurring? "
-                    f"What concrete advice would fix the biggest "
-                    f"weakness?",
+                    f"What causes the eval to crash below "
+                    f"-500cp? What concrete change would help "
+                    f"the AI survive longer?",
                 )).strip()
                 if reflection:
                     for iid, lbl in ind_labels.items():
