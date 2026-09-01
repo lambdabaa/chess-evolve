@@ -96,11 +96,21 @@ async def _api_call(
     return await _cli_call(system_prompt, user_msg, max_tokens)
 
 
+def _clean_env() -> dict[str, str]:
+    """Strip Claude Code session vars so subprocesses start fresh."""
+    skip = {
+        "CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_PID", "AI_AGENT", "CLAUDE_CODE_ENTRYPOINT",
+    }
+    return {k: v for k, v in os.environ.items() if k not in skip}
+
+
 async def _cli_call_opus(
     system_prompt: str, user_msg: str, max_tokens: int = 500,
 ) -> str:
     """Call Opus via claude CLI with retry."""
     import sys
+    env = _clean_env()
     for attempt in range(3):
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -113,15 +123,31 @@ async def _cli_call_opus(
                 "--allowedTools", "",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
+                cwd="/tmp",
             )
-            stdout, _ = await asyncio.wait_for(
+            stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=180.0,
             )
             result = stdout.decode().strip()
+            err = stderr.decode().strip()
+            if err:
+                print(
+                    f"  [OPUS] stderr (attempt {attempt+1}): {err[:200]}",
+                    file=sys.stderr, flush=True,
+                )
+            if "max turns" in result.lower() or "reached max" in result.lower():
+                print(
+                    f"  [OPUS] HIT MAX TURNS (attempt {attempt+1}): "
+                    f"stdout={result[:150]!r} returncode={proc.returncode}",
+                    file=sys.stderr, flush=True,
+                )
+                continue
             if result:
                 return result
             print(
-                f"  [OPUS] empty response (attempt {attempt+1})",
+                f"  [OPUS] empty response (attempt {attempt+1})"
+                f" returncode={proc.returncode}",
                 file=sys.stderr, flush=True,
             )
         except asyncio.TimeoutError:

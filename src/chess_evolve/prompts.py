@@ -290,6 +290,8 @@ SELECTOR_PROMPTS = {
 PROMPT_TABLES: dict[str, dict[str, str]] = {
     "tactical_style": TACTICAL_PROMPTS,
     "positional_style": POSITIONAL_PROMPTS,
+    "analysis_style": ANALYSIS_PROMPTS,
+    "selector_style": SELECTOR_PROMPTS,
     "verify_style": BLUNDER_CHECK_PROMPTS,
     "critique_style": CRITIQUE_PROMPTS,
     "opening_hint": OPENING_HINTS,

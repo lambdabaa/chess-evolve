@@ -153,7 +153,7 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
 
     selector = AgentNode(
         id="selector", role=AgentRole.STRATEGIST,
-        prompt_template=SELECTOR_PROMPTS[cfg.selector_style],
+        prompt_template=_get_prompt("selector_style", cfg.selector_style),
         reads={".factory/chess/tactics.md", ".factory/chess/positional.md",
                ".factory/chess/board_state.md"},
         writes={".factory/chess/move.md"},
@@ -212,7 +212,7 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
 
     analyst = AgentNode(
         id="board_analyst", role=AgentRole.RESEARCHER,
-        prompt_template=ANALYSIS_PROMPTS[cfg.analysis_style],
+        prompt_template=_get_prompt("analysis_style", cfg.analysis_style),
         reads={".factory/chess/board_state.md"},
         writes={".factory/chess/analysis.md"},
     )

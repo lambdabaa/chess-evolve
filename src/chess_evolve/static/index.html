@@ -670,7 +670,7 @@ function renderBestGameCard(containerId, game, label, baseline = 0) {
   const topLabel = `Stockfish ${g.elo} (${sfColor})`;
   const botLabel = `Claude (${llmColor})`;
   const ec = g.eval_curve || [];
-  const sc = computeGameScore(g);
+  const sc = +computeGameScore(g).toFixed(1);
   const defaults = {
     pipeline_mode: 'parallel', verify_iterations: '2',
     game_phase_routing: 'False', skip_forced: 'False', use_opponent_model: 'False',
@@ -1032,8 +1032,10 @@ function updateEloChart() {
   const sortedCp = [...allCp].sort((a,b) => a - b);
   const p10 = sortedCp[Math.floor(sortedCp.length * 0.10)] ?? 0;
   const topScore = Math.max(...allCp);
-  const minCp = p10 - 30;
-  const maxCp = topScore + 30;
+  const dataRange = Math.max(topScore - p10, 1);
+  const margin = Math.max(dataRange * 0.2, 1);
+  const minCp = Math.floor(p10 - margin);
+  const maxCp = Math.ceil(topScore + margin);
   const cpRange = Math.max(maxCp - minCp, 1);
 
   function x(i) { return pad.left + (i / Math.max(gens.length - 1, 1)) * plotW; }

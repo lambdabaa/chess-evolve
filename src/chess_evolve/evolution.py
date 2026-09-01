@@ -20,8 +20,8 @@ from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
 from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, YELLOW, header, print
 from chess_evolve.engine import _cli_call_opus
 from chess_evolve.game import EvalResult, evaluate_pipeline
-from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, build_pipeline
-from chess_evolve.prompts import PROMPT_REGISTRY, _register_prompt
+from chess_evolve.pipeline import KNOB_SPACE, _PROMPT_NODES, PipelineConfig, build_pipeline
+from chess_evolve.prompts import PROMPT_REGISTRY, _get_prompt, _register_prompt
 
 
 def mutate_knobs(
@@ -38,24 +38,98 @@ def mutate_knobs(
     return new, f"{knob_name}={new_val}"
 
 
+def _extract_json_objects(raw: str) -> list[dict]:
+    """Extract JSON objects from Opus output, handling multi-line and arrays."""
+    # Try as a JSON array first
+    stripped = raw.strip()
+    if stripped.startswith("["):
+        try:
+            arr = json.loads(stripped)
+            if isinstance(arr, list):
+                return [x for x in arr if isinstance(x, dict)]
+        except json.JSONDecodeError:
+            pass
+
+    # Extract individual JSON objects using brace matching
+    objects = []
+    i = 0
+    while i < len(stripped):
+        if stripped[i] == "{":
+            depth = 0
+            start = i
+            in_string = False
+            escape = False
+            for j in range(i, len(stripped)):
+                c = stripped[j]
+                if escape:
+                    escape = False
+                    continue
+                if c == "\\":
+                    escape = True
+                    continue
+                if c == '"' and not escape:
+                    in_string = not in_string
+                elif not in_string:
+                    if c == "{":
+                        depth += 1
+                    elif c == "}":
+                        depth -= 1
+                        if depth == 0:
+                            try:
+                                obj = json.loads(stripped[start:j + 1])
+                                if isinstance(obj, dict):
+                                    objects.append(obj)
+                            except json.JSONDecodeError:
+                                pass
+                            i = j + 1
+                            break
+            else:
+                i += 1
+        else:
+            i += 1
+    return objects
+
+
 def parse_opus_proposals(
     raw: str, best_cfg: PipelineConfig, gen: int,
-) -> list[tuple[str, PipelineConfig, object, int]]:
-    """Parse Opus JSON proposals into (label, cfg, pipeline, n_games) tuples."""
-    candidates: list[tuple[str, PipelineConfig, object, int]] = []
-    for line in raw.strip().split("\n"):
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
+) -> list[tuple[str, PipelineConfig, object, int, dict]]:
+    """Parse Opus JSON proposals into (label, cfg, pipeline, n_games, meta) tuples."""
+    candidates: list[tuple[str, PipelineConfig, object, int, dict]] = []
+    for prop in _extract_json_objects(raw):
         try:
-            prop = json.loads(line)
             n_games = prop.get("games", GAMES_PER_EVAL)
-            if "knobs" in prop and isinstance(prop["knobs"], dict):
+            prompt_meta: dict = {}
+            if "node" in prop and "prompt" in prop:
+                # Format 2: prompt rewrite — {"node": "selector", "prompt": "..."}
+                node = prop["node"]
+                prompt_text = prop["prompt"]
+                if node not in _PROMPT_NODES:
+                    continue
+                NODE_TO_KNOB = {
+                    "board_analyst": "analysis_style",
+                    "tactician": "tactical_style",
+                    "positionalist": "positional_style",
+                    "selector": "selector_style",
+                    "verifier": "verify_style",
+                }
+                style_knob = NODE_TO_KNOB.get(node, f"{node}_style")
+                old_val = getattr(best_cfg, style_knob, "")
+                old_prompt = _get_prompt(style_knob, old_val)
+                value = f"opus_g{gen}_{len(candidates)+1}"
+                _register_prompt(style_knob, value, prompt_text)
+                for _, (kn, choices) in enumerate(KNOB_SPACE):
+                    if kn == style_knob and value not in choices:
+                        choices.append(value)
+                child_cfg = dataclasses.replace(best_cfg, **{style_knob: value})
+                desc = f"prompt({node})"
+                prompt_meta = {
+                    "node": node, "before": old_prompt, "after": prompt_text,
+                }
+                print(f"  {CYAN}NEW PROMPT: {node} -> {style_knob}={value}{RESET}")
+            elif "knobs" in prop and isinstance(prop["knobs"], dict):
                 overrides = {k: v for k, v in prop["knobs"].items() if hasattr(best_cfg, k)}
-                for k, v in overrides.items():
-                    if "prompt" in prop:
-                        _register_prompt(k, v, prop["prompt"])
-                    for _, (kn, choices) in enumerate(KNOB_SPACE):
+                for _, (kn, choices) in enumerate(KNOB_SPACE):
+                    for k, v in overrides.items():
                         if kn == k and v not in choices:
                             choices.append(v)
                 child_cfg = dataclasses.replace(best_cfg, **overrides)
@@ -63,7 +137,7 @@ def parse_opus_proposals(
             elif prop.get("rerun"):
                 child_cfg = dataclasses.replace(best_cfg)
                 desc = "rerun (variance check)"
-            else:
+            elif "knob" in prop:
                 knob, value = prop["knob"], prop["value"]
                 if not hasattr(best_cfg, knob):
                     continue
@@ -75,9 +149,11 @@ def parse_opus_proposals(
                         choices.append(value)
                 child_cfg = dataclasses.replace(best_cfg, **{knob: value})
                 desc = f"{knob}={value}"
+            else:
+                continue
             candidates.append((
                 f"Gen {gen}.{len(candidates)+1}: {desc}",
-                child_cfg, build_pipeline(child_cfg), n_games,
+                child_cfg, build_pipeline(child_cfg), n_games, prompt_meta,
             ))
         except Exception:
             continue
@@ -216,21 +292,31 @@ async def main():
 
         # Opus reflection (primary — reads game data)
         if all_results:
+            refl_system = (
+                "You are a chess coach analyzing an AI's games. "
+                "Be specific about moves and positions. "
+                "3-4 sentences."
+            )
+            refl_user = (
+                f"SCORING: Sum of centipawn evals while above "
+                f"-500cp (stops counting at first dip below). "
+                f"Higher = longer survival with better positions. "
+                f"Draws add 100K, wins add 200K.\n\n"
+                f"{history}\n\n"
+                f"Archive: {archive.size} cells, "
+                f"best={best_score:+.0f}\n\n"
+                f"What causes the eval to crash below "
+                f"-500cp? What concrete change would help "
+                f"the AI survive longer?"
+            )
+            refl_input_path = LIVE_DIR / f"_opus_reflection_gen{gen}.txt"
+            refl_input_path.write_text(
+                f"=== SYSTEM ===\n{refl_system}\n\n"
+                f"=== USER ({len(refl_user)} chars) ===\n{refl_user}"
+            )
             try:
                 reflection = (await _cli_call_opus(
-                    "You are a chess coach analyzing an AI's games. "
-                    "Be specific about moves and positions. "
-                    "3-4 sentences.",
-                    f"SCORING: Sum of centipawn evals while above "
-                    f"-500cp (stops counting at first dip below). "
-                    f"Higher = longer survival with better positions. "
-                    f"Draws add 100K, wins add 200K.\n\n"
-                    f"{history}\n\n"
-                    f"Archive: {archive.size} cells, "
-                    f"best={best_score:+.0f}\n\n"
-                    f"What causes the eval to crash below "
-                    f"-500cp? What concrete change would help "
-                    f"the AI survive longer?",
+                    refl_system, refl_user,
                 )).strip()
                 if reflection:
                     for iid, lbl in ind_labels.items():
@@ -264,9 +350,13 @@ async def main():
                         " of advice to prevent these blunders. "
                         "Be specific about the pattern."
                     )
+                    coach_user = "Recent blunders:\n" + "\n".join(blunder_details[:8])
+                    (LIVE_DIR / f"_opus_coach_gen{gen}.txt").write_text(
+                        f"=== SYSTEM ===\n{coach_prompt}\n\n"
+                        f"=== USER ({len(coach_user)} chars) ===\n{coach_user}"
+                    )
                     hint = (await _cli_call_opus(
-                        coach_prompt,
-                        "Recent blunders:\n" + "\n".join(blunder_details[:8]),
+                        coach_prompt, coach_user,
                     )).strip()
                     if hint and reflection_report:
                         reflection_report.prompt_improvements.append(hint)
@@ -274,7 +364,73 @@ async def main():
                 except Exception:
                     pass
 
-        # Step 2: Mutation
+        # Step 2: Generate candidates — 4 Opus-driven + 1 random
+        candidates = []
+        prompt_nodes = ", ".join(_PROMPT_NODES)
+
+        # 2a: Opus proposes 4 variants, each from a rank-weighted parent
+        OPUS_SLOTS = 4
+        for slot in range(OPUS_SLOTS):
+            parent = archive.sample_parent(
+                tournament_size=5, rank_weighted=True,
+            )
+            if parent is None:
+                continue
+            parent_cfg = ind_configs.get(parent.id, seed_cfg)
+            parent_label = ind_labels.get(parent.id, "seed")
+            knob_desc = "\n".join(
+                f"  {name}: current={getattr(parent_cfg, name)}, options={choices}"
+                for name, choices in KNOB_SPACE
+            )
+            opus_system = (
+                "You are an optimizer for a chess AI pipeline. "
+                "Propose exactly 1 experiment variant as a single JSON object. "
+                "No other text — just 1 JSON object."
+            )
+            opus_user = (
+                f"SCORING: Sum of (cp+500)/1000 while above -500cp. "
+                f"Draws +100K, wins +200K. Higher = better.\n\n"
+                f"RESULTS:\n{history}\n\n"
+                f"REFLECTION:\n{reflection or '(none)'}\n\n"
+                f"PARENT: {parent_label} (score={parent.score:+.0f})\n"
+                f"CONFIG:\n{knob_desc}\n\n"
+                f"PROMPT-MUTABLE NODES: {prompt_nodes}\n\n"
+                f"Output 1 JSON object. {'Use FORMAT 2 (prompt rewrite).' if slot == 0 else 'Use either format.'}\n\n"
+                f"FORMAT 1 — Knob change (one or more knobs):\n"
+                f'  {{"knobs": {{"tactical_style": "material", "candidate_moves": 3}}}}\n\n'
+                f"FORMAT 2 — Prompt rewrite (rewrites one agent's prompt):\n"
+                f'  {{"node": "selector", "prompt": "You are a chess move selector. ..."}}\n'
+                f"  Valid nodes: {prompt_nodes}\n"
+                f"  Write the COMPLETE new prompt — it replaces the existing one.\n\n"
+                f"IMPORTANT: Do NOT mix formats. Use format 1 for knobs, "
+                f"format 2 for prompts.\n\n"
+                f"Base the proposal on the reflection. "
+                f"Prompt rewrites are the most powerful lever — "
+                f"they change HOW agents think, not just parameters."
+            )
+            if slot == 0:
+                (LIVE_DIR / f"_opus_proposals_gen{gen}.txt").write_text(
+                    f"=== SYSTEM ===\n{opus_system}\n\n"
+                    f"=== USER ({len(opus_user)} chars) ===\n{opus_user}"
+                )
+            try:
+                raw = await _cli_call_opus(opus_system, opus_user)
+                if raw:
+                    parsed = parse_opus_proposals(raw, parent_cfg, gen)
+                    if parsed:
+                        label, cfg, pipeline, n_games, pmeta = parsed[0]
+                        label = f"Gen {gen}.{len(candidates)+1}: {label.split(': ', 1)[-1]}"
+                        mut_detail = {
+                            "operator": "opus_guided",
+                            "node": pmeta.get("node", ""),
+                            **pmeta,
+                        }
+                        print(f"  {CYAN}> {label} [OPUS from {parent_label}]{RESET}")
+                        candidates.append((label, cfg, pipeline, mut_detail))
+            except Exception as exc:
+                print(f"  {DIM}(opus slot {slot+1} failed: {exc}){RESET}")
+
+        # 2b: Fill remaining slots with random mutations
         strategy = WeightedRandomStrategy(weights={
             MutationType.NODE_INSERT.value: 0,
             MutationType.NODE_REMOVE.value: 0,
@@ -285,12 +441,9 @@ async def main():
             MutationType.PROMPT_MUTATE.value: 0.50,
             MutationType.KNOB_MUTATE.value: 0.50,
         })
-        if stalled and hasattr(strategy, "on_plateau"):
-            strategy.on_plateau()
-
-        # Step 2b: Generate candidates sequentially (prompt rewrites are sync)
-        candidates = []
-        for c in range(CANDIDATES_PER_GEN):
+        random_attempts = 0
+        while len(candidates) < CANDIDATES_PER_GEN and random_attempts < 20:
+            random_attempts += 1
             parent = archive.sample_parent(
                 tournament_size=5, rank_weighted=True,
             )
@@ -298,7 +451,6 @@ async def main():
                 continue
             parent_cfg = ind_configs.get(parent.id, seed_cfg)
             parent_wf = build_pipeline(parent_cfg).compile()
-
             mut = apply_random_mutation(
                 parent_wf, strategy, gen,
                 reflection_report=reflection_report,
@@ -310,10 +462,7 @@ async def main():
             def _coerce_back(k, v):
                 orig = getattr(parent_cfg, k, None)
                 if isinstance(orig, bool):
-                    return (
-                        v == "True" if isinstance(v, str)
-                        else bool(v)
-                    )
+                    return v == "True" if isinstance(v, str) else bool(v)
                 if isinstance(orig, int):
                     return int(v) if not isinstance(v, int) else v
                 return v
@@ -326,9 +475,7 @@ async def main():
             }
             if overrides:
                 child_cfg = dataclasses.replace(parent_cfg, **overrides)
-                desc = " + ".join(
-                    f"{k}={v}" for k, v in overrides.items()
-                )
+                desc = " + ".join(f"{k}={v}" for k, v in overrides.items())
             else:
                 child_cfg = parent_cfg
                 desc = rec.rationale or "no-op"
@@ -339,33 +486,25 @@ async def main():
                     child_pipeline.graph.knob_expandable[k] = (
                         child_wf.knob_expandable.get(k, "")
                     )
-            label = f"Gen {gen}.{c+1}: {desc}"
+            label = f"Gen {gen}.{len(candidates)+1}: {desc}"
             prompt_detail: dict[str, str] = {}
             if rec.operator.value == "prompt_mutate" and rec.target_node:
                 nid = rec.target_node
-                new_prompt = child_wf.knob_values.get(
-                    f"_prompt_{nid}", "",
-                )
-                old_node = (
-                    build_pipeline(parent_cfg).graph.nodes.get(nid)
-                )
+                new_prompt = child_wf.knob_values.get(f"_prompt_{nid}", "")
+                old_node = build_pipeline(parent_cfg).graph.nodes.get(nid)
                 old_prompt = ""
                 if old_node and hasattr(old_node, "prompt_template"):
                     old_prompt = old_node.prompt_template or ""
                 prompt_detail = {
-                    "node": nid,
-                    "before": old_prompt,
-                    "after": str(new_prompt),
+                    "node": nid, "before": old_prompt, "after": str(new_prompt),
                 }
             mut_detail = {
                 "operator": rec.operator.value,
                 "node": rec.target_node or "",
                 **prompt_detail,
             }
-            print(f"  {YELLOW}> {label}{RESET}")
-            candidates.append(
-                (label, child_cfg, child_pipeline, mut_detail)
-            )
+            print(f"  {YELLOW}> {label} [random]{RESET}")
+            candidates.append((label, child_cfg, child_pipeline, mut_detail))
 
         # Step 3: Evaluate all candidates in parallel
         print(
