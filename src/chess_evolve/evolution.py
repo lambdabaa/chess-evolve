@@ -20,7 +20,7 @@ from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
 from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, YELLOW, header, print
 from chess_evolve.engine import _cli_call_opus
 from chess_evolve.game import EvalResult, evaluate_pipeline
-from chess_evolve.pipeline import KNOB_SPACE, _PROMPT_NODES, PipelineConfig, build_pipeline
+from chess_evolve.pipeline import _PROMPT_NODES, KNOB_SPACE, PipelineConfig, build_pipeline
 from chess_evolve.prompts import PROMPT_REGISTRY, _get_prompt, _register_prompt
 
 
@@ -224,7 +224,6 @@ async def main():
     reflector = OuterLoopReflector(k=3)
     score_trajectory: list[float] = [seed_result.composite_score]
     cycle_records: dict[str, CycleRecord] = {seed_ind.id: seed_result.to_cycle_record(0)}
-    PLATEAU_WINDOW, PLATEAU_THRESHOLD = 10, 5.0
     all_results: list[tuple[str, PipelineConfig, EvalResult, float]] = [
         (f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, seed_result.composite_score),
     ]
@@ -234,10 +233,6 @@ async def main():
         best_ind = archive.best()
         best_score = best_ind.score if best_ind else 0
         header(f"GEN {gen} -- archive: {archive.size} cells, best={best_score:+.0f}")
-
-        stalled = (len(score_trajectory) > PLATEAU_WINDOW and
-                   all(abs(s - score_trajectory[-(PLATEAU_WINDOW+1)]) < PLATEAU_THRESHOLD
-                       for s in score_trajectory[-PLATEAU_WINDOW:]))
 
         # Step 1: Contrastive reflection
         all_sorted = sorted(all_results, key=lambda x: x[3], reverse=True)
@@ -395,7 +390,8 @@ async def main():
                 f"PARENT: {parent_label} (score={parent.score:+.0f})\n"
                 f"CONFIG:\n{knob_desc}\n\n"
                 f"PROMPT-MUTABLE NODES: {prompt_nodes}\n\n"
-                f"Output 1 JSON object. {'Use FORMAT 2 (prompt rewrite).' if slot == 0 else 'Use either format.'}\n\n"
+                f"Output 1 JSON object. "
+                f"{'Use FORMAT 2 (prompt rewrite).' if slot == 0 else 'Use either format.'}\n\n"
                 f"FORMAT 1 — Knob change (one or more knobs):\n"
                 f'  {{"knobs": {{"tactical_style": "material", "candidate_moves": 3}}}}\n\n'
                 f"FORMAT 2 — Prompt rewrite (rewrites one agent's prompt):\n"

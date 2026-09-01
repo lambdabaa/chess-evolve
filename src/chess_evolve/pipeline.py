@@ -21,11 +21,7 @@ from factory.workflow.primitives import (
     Workflow,
 )
 
-from chess_evolve.prompts import (
-    ANALYSIS_PROMPTS,
-    SELECTOR_PROMPTS,
-    _get_prompt,
-)
+from chess_evolve.prompts import _get_prompt
 
 KNOB_SPACE: list[tuple[str, list]] = [
     ("analysis_style", ["concise", "detailed", "threat_focused"]),
