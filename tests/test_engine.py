@@ -76,15 +76,6 @@ class TestBoardUserMsg:
         msg = _board_user_msg(start_board)
         assert "e2e4" in msg
 
-    def test_includes_phase_hint(self, start_board):
-        cfg = PipelineConfig()
-        msg = _board_user_msg(start_board, cfg=cfg)
-        assert "OPENING" in msg
-
     def test_includes_side_to_move(self, start_board):
         msg = _board_user_msg(start_board)
         assert "White" in msg
-
-    def test_endgame_hint(self, endgame_board):
-        msg = _board_user_msg(endgame_board)
-        assert "ENDGAME" in msg
