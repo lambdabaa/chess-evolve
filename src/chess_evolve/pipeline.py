@@ -149,9 +149,9 @@ def build_pipeline(cfg: PipelineConfig | None = None) -> Package:
             default=coerce(val),
             bounds=[coerce(c) for c in choices],
             expansion_hint=(
-                f"Max retry attempts for legal move generation"
+                "Max retry attempts for legal move generation"
                 if knob_name == "max_retries"
-                else f"Prompt style for the move generator"
+                else "Prompt style for the move generator"
             ),
         ))
 

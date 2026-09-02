@@ -5,16 +5,8 @@ from __future__ import annotations
 import chess
 
 from chess_evolve.prompts import (
-    ANALYSIS_PROMPTS,
-    BLUNDER_CHECK_PROMPTS,
-    CRITIQUE_PROMPTS,
-    ENDGAME_HINTS,
-    MIDDLEGAME_HINTS,
-    OPENING_HINTS,
-    POSITIONAL_PROMPTS,
+    GENERATOR_PROMPTS,
     PROMPT_REGISTRY,
-    SELECTOR_PROMPTS,
-    TACTICAL_PROMPTS,
     _get_prompt,
     _register_prompt,
     detect_phase,
@@ -40,20 +32,12 @@ class TestDetectPhase:
 
 
 class TestGetPrompt:
-    def test_known_tactical_key(self):
-        result = _get_prompt("tactical_style", "broad")
-        assert result == TACTICAL_PROMPTS["broad"]
-
-    def test_known_positional_key(self):
-        result = _get_prompt("positional_style", "classical")
-        assert result == POSITIONAL_PROMPTS["classical"]
-
-    def test_known_verify_key(self):
-        result = _get_prompt("verify_style", "strict")
-        assert result == BLUNDER_CHECK_PROMPTS["strict"]
+    def test_known_generator_key(self):
+        result = _get_prompt("generator_style", "generic")
+        assert result == GENERATOR_PROMPTS["generic"]
 
     def test_unknown_value_returns_value_itself(self):
-        result = _get_prompt("tactical_style", "custom_never_seen_prompt_text")
+        result = _get_prompt("generator_style", "custom_never_seen_prompt_text")
         assert result == "custom_never_seen_prompt_text"
 
     def test_unknown_knob_name(self):
@@ -64,12 +48,11 @@ class TestGetPrompt:
 class TestRegisterPrompt:
     def test_register_and_retrieve(self, tmp_path, monkeypatch):
         monkeypatch.setattr("chess_evolve.config.LIVE_DIR", tmp_path)
-        _register_prompt("tactical_style", "test_variant", "A custom tactical prompt")
-        assert PROMPT_REGISTRY["tactical_style"]["test_variant"] == "A custom tactical prompt"
-        result = _get_prompt("tactical_style", "test_variant")
-        assert result == "A custom tactical prompt"
-        # Clean up
-        del PROMPT_REGISTRY["tactical_style"]["test_variant"]
+        _register_prompt("generator_style", "test_variant", "A custom prompt")
+        assert PROMPT_REGISTRY["generator_style"]["test_variant"] == "A custom prompt"
+        result = _get_prompt("generator_style", "test_variant")
+        assert result == "A custom prompt"
+        del PROMPT_REGISTRY["generator_style"]["test_variant"]
 
     def test_register_writes_recording(self, tmp_path, monkeypatch):
         monkeypatch.setattr("chess_evolve.config.LIVE_DIR", tmp_path)
@@ -77,44 +60,11 @@ class TestRegisterPrompt:
         recording = tmp_path / "recording.jsonl"
         assert recording.exists()
         assert "prompt_invented" in recording.read_text()
-        # Clean up
         if "test_knob" in PROMPT_REGISTRY:
             del PROMPT_REGISTRY["test_knob"]
 
 
 class TestPromptDictsAreStrings:
-    def test_analysis_prompts(self):
-        for k, v in ANALYSIS_PROMPTS.items():
-            assert isinstance(v, str), f"ANALYSIS_PROMPTS[{k}] is not a string"
-
-    def test_tactical_prompts(self):
-        for k, v in TACTICAL_PROMPTS.items():
-            assert isinstance(v, str), f"TACTICAL_PROMPTS[{k}] is not a string"
-
-    def test_positional_prompts(self):
-        for k, v in POSITIONAL_PROMPTS.items():
-            assert isinstance(v, str), f"POSITIONAL_PROMPTS[{k}] is not a string"
-
-    def test_opening_hints(self):
-        for k, v in OPENING_HINTS.items():
-            assert isinstance(v, str), f"OPENING_HINTS[{k}] is not a string"
-
-    def test_middlegame_hints(self):
-        for k, v in MIDDLEGAME_HINTS.items():
-            assert isinstance(v, str), f"MIDDLEGAME_HINTS[{k}] is not a string"
-
-    def test_endgame_hints(self):
-        for k, v in ENDGAME_HINTS.items():
-            assert isinstance(v, str), f"ENDGAME_HINTS[{k}] is not a string"
-
-    def test_selector_prompts(self):
-        for k, v in SELECTOR_PROMPTS.items():
-            assert isinstance(v, str), f"SELECTOR_PROMPTS[{k}] is not a string"
-
-    def test_blunder_check_prompts(self):
-        for k, v in BLUNDER_CHECK_PROMPTS.items():
-            assert isinstance(v, str), f"BLUNDER_CHECK_PROMPTS[{k}] is not a string"
-
-    def test_critique_prompts(self):
-        for k, v in CRITIQUE_PROMPTS.items():
-            assert isinstance(v, str), f"CRITIQUE_PROMPTS[{k}] is not a string"
+    def test_generator_prompts(self):
+        for k, v in GENERATOR_PROMPTS.items():
+            assert isinstance(v, str), f"GENERATOR_PROMPTS[{k}] is not a string"

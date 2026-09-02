@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import json
 import random
 import shutil
 import time
-
-
 from dataclasses import dataclass, field
+
+from factory.workflow.package import Package
 
 from chess_evolve.broadcast import broadcast_archive, broadcast_eval_result
 from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
-from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, YELLOW, header, print
+from chess_evolve.display import CYAN, DIM, GREEN, MAGENTA, RESET, WHITE, header, print
 from chess_evolve.engine import _cli_call_opus
 from chess_evolve.game import EvalResult, evaluate_pipeline
-from chess_evolve.pipeline import _PROMPT_NODES, KNOB_SPACE, PipelineConfig, build_pipeline
-from chess_evolve.prompts import PROMPT_REGISTRY, _get_prompt, _register_prompt
+from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, build_pipeline
+from chess_evolve.prompts import PROMPT_REGISTRY, _register_prompt
 
 
 @dataclass
@@ -150,7 +149,6 @@ def _build_pipeline_from_spec(
     else:
         body = Sequential(*pkgs, name="chess-agents")
 
-    from chess_evolve.pipeline import GENERATOR_PROMPT
     legality_gate = GateNode(
         id="legality_gate",
         evaluator_type="fn",
@@ -387,10 +385,6 @@ async def main():
                     refl_system, refl_user,
                 )).strip()
                 if reflection:
-                    for iid, lbl in ind_labels.items():
-                        reflection = reflection.replace(
-                            iid[:8], lbl,
-                        )
                     print(
                         f"\n  {MAGENTA}Reflection:{RESET} "
                         f"{reflection}"

@@ -1,60 +1,23 @@
-"""Tests for the evolution loop utilities and factory integration."""
+"""Tests for the evolution loop utilities."""
 
 from __future__ import annotations
 
 import random
 
-from factory.outer_loop.similarity import compute_features
-from factory.workflow.primitives import AgentNode
-
 from chess_evolve.evolution import mutate_knobs
 from chess_evolve.pipeline import KNOB_SPACE, PipelineConfig, build_pipeline
 
 
-class TestFactoryFeatures:
-    """Verify factory's compute_features differentiates our knob combos."""
+class TestBuildAndCompile:
+    def test_default_pipeline_compiles(self):
+        wf = build_pipeline().compile()
+        assert "generator" in wf.nodes
+        assert len(wf.nodes) >= 2
 
-    def test_different_knobs_different_features(self):
-        wf1 = build_pipeline(PipelineConfig(verify_style="strict")).compile()
-        wf2 = build_pipeline(PipelineConfig(verify_style="lenient")).compile()
-        assert compute_features(wf1) != compute_features(wf2)
-
-    def test_different_prompts_different_features(self):
-        cfg = PipelineConfig()
-        wf1 = build_pipeline(cfg).compile()
-        wf2 = build_pipeline(cfg).compile()
-        node = wf2.nodes["tactician"]
-        assert isinstance(node, AgentNode)
-        wf2.nodes["tactician"] = node.model_copy(
-            update={"prompt_template": "completely different prompt"}
-        )
-        assert compute_features(wf1) != compute_features(wf2)
-
-    def test_same_config_same_features(self):
-        cfg = PipelineConfig()
-        wf = build_pipeline(cfg).compile()
-        assert compute_features(wf) == compute_features(wf)
-
-    def test_fixed_length(self):
-        wf1 = build_pipeline(PipelineConfig(verify_iterations=2)).compile()
-        wf2 = build_pipeline(PipelineConfig(verify_iterations=0)).compile()
-        assert len(compute_features(wf1)) == len(compute_features(wf2))
-
-    def test_all_knob_combos_unique(self):
-        import dataclasses
-        seen = set()
-        for vs in ["strict", "lenient"]:
-            for vi in [0, 2]:
-                for oh in ["theory", "principled"]:
-                    cfg = dataclasses.replace(
-                        PipelineConfig(),
-                        verify_style=vs,
-                        verify_iterations=vi,
-                        opening_hint=oh,
-                    )
-                    f = compute_features(build_pipeline(cfg).compile())
-                    seen.add(f)
-        assert len(seen) == 2 * 2 * 2
+    def test_different_configs_produce_different_workflows(self):
+        wf1 = build_pipeline(PipelineConfig(max_retries=1)).compile()
+        wf2 = build_pipeline(PipelineConfig(max_retries=5)).compile()
+        assert wf1.knob_values != wf2.knob_values
 
 
 class TestMutateKnobs:

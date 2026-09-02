@@ -14,7 +14,6 @@ from factory.workflow.package import Package
 
 from chess_evolve.broadcast import broadcast_game_state
 from chess_evolve.pipeline import PipelineConfig
-from chess_evolve.prompts import detect_phase
 
 _client = None
 _api_semaphore = asyncio.Semaphore(2)
