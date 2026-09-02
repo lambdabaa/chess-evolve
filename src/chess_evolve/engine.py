@@ -14,16 +14,10 @@ from factory.workflow.package import Package
 
 from chess_evolve.broadcast import broadcast_game_state
 from chess_evolve.pipeline import PipelineConfig
-from chess_evolve.prompts import (
-    ENDGAME_HINTS,
-    MIDDLEGAME_HINTS,
-    OPENING_HINTS,
-    _get_phase_hint,
-    detect_phase,
-)
+from chess_evolve.prompts import detect_phase
 
 _client = None
-_api_semaphore = asyncio.Semaphore(5)
+_api_semaphore = asyncio.Semaphore(2)
 CHESS_MODEL = os.environ.get("CHESS_MODEL", "opus")
 USE_HAIKU_API = os.environ.get("CHESS_USE_HAIKU_API", "").lower() in ("1", "true", "yes")
 HAIKU_MODEL = os.environ.get("CHESS_HAIKU_MODEL", "claude-haiku-4-5@20251001")
@@ -63,28 +57,56 @@ async def _haiku_api_call(
 async def _cli_call(
     system_prompt: str, user_msg: str, max_tokens: int = 200,
 ) -> str:
-    """Call LLM via claude CLI."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "claude", "-p", user_msg,
-            "--model", CHESS_MODEL,
-            "--append-system-prompt", system_prompt,
-            "--max-turns", "1",
-            "--output-format", "text",
-            "--bare",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
-        return stdout.decode().strip()
-    except asyncio.TimeoutError:
+    """Call LLM via claude CLI with retry."""
+    import sys
+    env = _clean_env()
+    for attempt in range(3):
         try:
-            proc.kill()  # type: ignore[possibly-undefined]
+            proc = await asyncio.create_subprocess_exec(
+                "claude", "-p", user_msg,
+                "--model", CHESS_MODEL,
+                "--append-system-prompt", system_prompt,
+                "--max-turns", "2",
+                "--output-format", "text",
+                "--bare",
+                "--allowedTools", "",
+                "--effort", "low",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+                cwd="/tmp",
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=45.0,
+            )
+            result = stdout.decode().strip()
+            if "max turns" in result.lower() or "reached max" in result.lower():
+                print(
+                    f"  [CLI] HIT MAX TURNS (attempt {attempt+1})",
+                    file=sys.stderr, flush=True,
+                )
+                await asyncio.sleep(2)
+                continue
+            if result:
+                return result
+            print(
+                f"  [CLI] empty (attempt {attempt+1})",
+                file=sys.stderr, flush=True,
+            )
+            await asyncio.sleep(2)
+        except asyncio.TimeoutError:
+            print(
+                f"  [CLI] timeout (attempt {attempt+1})",
+                file=sys.stderr, flush=True,
+            )
+            try:
+                proc.kill()  # type: ignore[possibly-undefined]
+            except Exception:
+                pass
+            await asyncio.sleep(2)
         except Exception:
-            pass
-        return ""
-    except Exception:
-        return ""
+            await asyncio.sleep(1)
+    return ""
 
 
 async def _api_call(
@@ -175,61 +197,31 @@ async def _sdk_invoke_agent(
     timeout: float = 25.0,
     **kwargs: object,
 ) -> tuple[str, int]:
-    """Drop-in for factory's invoke_agent using Haiku API or CLI."""
-    system = f"You are a chess {role}. Be concise — max 100 words."
-    if role == "strategist":
-        # Check if candidate_moves > 1 from board state context
-        n_candidates = 1
-        if "CANDIDATES:" in task:
-            import re as _re
-            cm = _re.search(r'CANDIDATES:\s*(\d+)', task)
-            if cm:
-                n_candidates = int(cm.group(1))
-        if n_candidates > 1:
-            system += (
-                f"\n\nList your top {n_candidates} candidate moves "
-                "for YOUR color, one per line, best first. "
-                "Format: source+destination (e.g. e2e4). "
-                "For each, briefly note if it hangs a piece. "
-                "No other text."
-            )
-        else:
-            system += (
-                "\n\nCRITICAL: Your ENTIRE response "
-                "must be exactly one UCI move for YOUR color "
-                "(check the board). "
-                "Format: source square + destination square "
-                "(4 chars like e2e4) or with promotion piece "
-                "(5 chars like e7e8q). "
-                "Always include the source square. "
-                "No explanation. Just the move."
-            )
+    """Drop-in for factory's invoke_agent using CLI."""
+    system = (
+        f"You are a chess {role}. "
+        "RESPOND IN UNDER 100 WORDS. "
+        "If selecting a move, output ONLY the UCI move (e.g. e2e4)."
+    )
     reads = {
         ".factory/chess/board_state.md",
+        ".factory/chess/memory.md",
         ".factory/chess/analysis.md",
-        ".factory/chess/tactics.md",
-        ".factory/chess/positional.md",
-        ".factory/chess/move.md",
         ".factory/chess/verification.md",
     }
-    if reads:
-        context_parts = []
-        for rpath in sorted(reads):
-            fpath = project_path / rpath
-            if fpath.exists():
-                content = fpath.read_text().strip()
-                if content:
-                    context_parts.append(f"--- {Path(rpath).name} ---\n{content}")
-        if context_parts:
-            task = task + "\n\n" + "\n\n".join(context_parts)
+    context_parts = []
+    for rpath in sorted(reads):
+        fpath = project_path / rpath
+        if fpath.exists():
+            content = fpath.read_text().strip()
+            if content:
+                context_parts.append(f"--- {Path(rpath).name} ---\n{content}")
+    if context_parts:
+        task = task + "\n\n" + "\n\n".join(context_parts)
     async with _api_semaphore:
         text = await _api_call(system, task)
-        if text:
-            reviews_dir = project_path / ".factory" / "reviews"
-            reviews_dir.mkdir(parents=True, exist_ok=True)
-            (reviews_dir / f"{role}-latest.md").write_text(text)
-        else:
-            text = "No analysis available."
+        if not text:
+            text = ""
         return text, 0
 
 
@@ -301,7 +293,6 @@ def _board_user_msg(
     use_context: bool = False, cfg: PipelineConfig | None = None,
 ) -> str:
     legal_moves = [m.uci() for m in board.legal_moves]
-    phase = detect_phase(board.fen())
     board_repr = cfg.board_representation if cfg else "fen"
     parts = []
     if board_repr in ("fen", "both"):
@@ -312,14 +303,6 @@ def _board_user_msg(
         f"You are {'White' if board.turn else 'Black'}.",
         f"Legal moves: {', '.join(legal_moves)}",
     ])
-    if cfg and cfg.candidate_moves > 1:
-        parts.append(f"CANDIDATES: {cfg.candidate_moves}")
-    if cfg:
-        parts.append(_get_phase_hint(cfg, phase))
-    else:
-        parts.append(OPENING_HINTS["principled"] if phase == "opening"
-                     else MIDDLEGAME_HINTS["safety_first"] if phase == "middlegame"
-                     else ENDGAME_HINTS["technical"])
     if use_context and game_moves:
         move_pairs = []
         for i in range(0, len(game_moves), 2):
@@ -376,8 +359,26 @@ async def get_pipeline_move(
     chess_dir.mkdir(parents=True, exist_ok=True)
     (chess_dir / "board_state.md").write_text(user_msg)
 
-    for name in ["analysis.md", "tactics.md", "positional.md", "move.md",
-                  "critique.md", "verification.md"]:
+    # Write rolling memory from previous moves' reasoning
+    memory_path = chess_dir / "memory.md"
+    if accumulated_outputs:
+        memory_lines = []
+        gen_history = accumulated_outputs.get("generator", [])
+        # Keep last 3 moves of context
+        start = max(0, len(gen_history) - 3)
+        for i in range(start, len(gen_history)):
+            move_num = i + 1
+            memory_lines.append(f"## Move {move_num}")
+            memory_lines.append(f"{gen_history[i][:300]}")
+            memory_lines.append("")
+        if memory_lines:
+            memory_path.write_text("\n".join(memory_lines))
+        elif memory_path.exists():
+            memory_path.unlink()
+    elif memory_path.exists():
+        memory_path.unlink()
+
+    for name in ["analysis.md", "verification.md"]:
         f = chess_dir / name
         if f.exists():
             f.unlink()
@@ -397,11 +398,8 @@ async def get_pipeline_move(
 
     def make_hooked_emit(original_emit):
         NODE_NAME_MAP = {
-            "board_analyst": "analyst", "tactician": "tactician",
-            "positionalist": "positionalist", "selector": "selector",
-            "opening_analyst": "opening", "endgame_analyst": "endgame",
-            "phase_gate": "phase_gate", "verifier": "verifier",
-            "verify_gate": "verifier",
+            "generator": "generator",
+            "legality_gate": "legality",
         }
 
         def _hooked_emit(event_type, event):
@@ -460,7 +458,7 @@ async def get_pipeline_move(
         )
         _executor_holder["ex"] = executor
         executor.completed_files.add(".factory/chess/board_state.md")
-        executor.completed_files.add(".factory/chess/verification.md")
+        executor.completed_files.add(".factory/chess/memory.md")
         executor._emit = make_hooked_emit(executor._emit)  # type: ignore[assignment]
         result = await executor.execute()
     finally:
@@ -485,31 +483,31 @@ async def get_pipeline_move(
                     file=sys.stderr, flush=True,
                 )
 
-    # Read move directly from executor's in-memory output (no filesystem)
+    # Find the move from whichever node writes move.md
     move = None
     move_source = "none"
-    selector_output = result.node_outputs.get("selector", "")
-    if selector_output:
-        move = _extract_move(selector_output, board)
+    move_node = None
+    for nid, node in wf.nodes.items():
+        if hasattr(node, "writes") and ".factory/chess/move.md" in (node.writes or set()):
+            move_node = nid
+            break
+    if move_node and move_node in result.node_outputs:
+        output = result.node_outputs[move_node]
+        move = _extract_move(output, board)
         if move:
             move_source = "pipeline"
         else:
             print(
-                f"  [{move_tag}] PARSE_FAIL"
-                f" selector={selector_output[:80]!r}",
+                f"  [{move_tag}] PARSE_FAIL {move_node}={output[:80]!r}",
                 file=sys.stderr, flush=True,
             )
-
-    verifier_output = result.node_outputs.get("verifier", "")
-    if verifier_output and move:
-        alt_move = _extract_move(verifier_output, board)
-        if (alt_move and alt_move != move
-                and "blunder" in verifier_output.lower()):
-            node_outputs["blunder_override"] = (
-                f"{move} -> {alt_move}"
-            )
-            move = alt_move
-            move_source = "blunder_override"
+    # Fallback: try every node output for a legal move
+    if move is None:
+        for nid, output in result.node_outputs.items():
+            move = _extract_move(output, board)
+            if move:
+                move_source = f"{nid}_fallback"
+                break
 
     node_outputs["_move_source"] = move_source
     return move, result.nodes_executed, node_outputs

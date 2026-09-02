@@ -593,7 +593,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-timeout", marker = "extra == 'dev'" },
     { name = "python-chess" },
-    { name = "remote-factory", git = "https://github.com/akashgit/remote-factory.git" },
+    { name = "remote-factory", git = "https://github.com/lambdabaa/remote-factory.git?rev=main" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "sse-starlette" },
     { name = "uvicorn" },
@@ -2855,8 +2855,8 @@ wheels = [
 
 [[package]]
 name = "remote-factory"
-version = "0.3.1.dev214+gf0b06f6"
-source = { git = "https://github.com/akashgit/remote-factory.git#f0b06f6d3084970c19e13540e7ad0e5293fa551c" }
+version = "0.0.1.dev1185+g51244fa0b"
+source = { git = "https://github.com/lambdabaa/remote-factory.git?rev=main#51244fa0b671c1584ed23bd8a7beda998a16cdd9" }
 dependencies = [
     { name = "anthropic", extra = ["vertex"] },
     { name = "fastapi" },

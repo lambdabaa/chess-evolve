@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Teach an LLM to play chess via evolutionary prompt optimization — a demo of remote-factory as a library"
 requires-python = ">=3.11"
 dependencies = [
-    "remote-factory @ git+https://github.com/lambdabaa/remote-factory.git@fix/prompt-mutation-survives-compile",
+    "remote-factory @ git+https://github.com/akashgit/remote-factory.git@main",
     "python-chess",
     "anthropic[vertex]",
     "fastapi",

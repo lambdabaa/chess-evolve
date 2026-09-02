@@ -160,76 +160,54 @@
 <body>
 <h1>Chess Pipeline Evolution</h1>
 <div class="subtitle">
-  Can factory's evolutionary outer loop teach an LLM to beat Stockfish?
-  Each move runs a <code>Package</code> pipeline through the real <code>WorkflowExecutor</code>.
-  Factory searches 10 knobs (456K combinations) via <code>KNOB_MUTATE</code> (guided by knob-contrastive reflection) and rewrites agent prompts via <code>PROMPT_MUTATE</code> (Opus rewrites full prompts based on blunder analysis).
-  Scored by wins (+500), draws (+200), position quality, and survival.
+  Starting from a single node with "pick a move" as the only instruction, can Opus discover chess strategy from scratch?
+  Each generation, Opus analyzes game results, diagnoses weaknesses, and rewrites the generator prompt to teach the LLM how to play better.
+  The pipeline runs through factory's real <code>WorkflowExecutor</code> with a <code>MAPElitesArchive</code> tracking the best prompt variants.
+  Scored by centipawn survival: sum of (cp+500)/1000 while above -500cp, plus bonuses for wins (+200) and draws (+100).
 </div>
 
 <div id="explainer" style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
   <div style="flex:1; min-width:300px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
     <h3 style="color:#58a6ff; font-size:13px; margin-bottom:8px;">Package Composition</h3>
     <pre style="color:#c9d1d9; font-size:11px; line-height:1.6; margin:0;">
-<span style="color:#8b949e"># Each chess move runs this pipeline.</span>
-<span style="color:#8b949e"># Sequential chains analysis → select+verify.</span>
-pipeline = <span style="color:#d29922">Sequential</span>(
-
-    <span style="color:#8b949e"># All 3 agents analyze in parallel</span>
-    <span style="color:#d29922">Parallel</span>(analyst, tact, pos),
-
-    <span style="color:#8b949e"># Verify loop: combined critique + blunder</span>
-    <span style="color:#8b949e"># check in one call. Loops back to selector</span>
-    <span style="color:#8b949e"># if issue found.</span>
-    <span style="color:#d29922">Loop</span>(
-        <span style="color:#d29922">Sequential</span>(selector_pkg, verify_pkg),
-        verify_gate, max_iterations=2,
-    ),
+<span style="color:#8b949e"># Minimal pipeline — optimizer discovers strategy</span>
+pipeline = <span style="color:#d29922">Loop</span>(
+    generator_pkg,   <span style="color:#8b949e"># "pick a move"</span>
+    legality_gate,   <span style="color:#8b949e"># is it legal?</span>
+    max_iterations=<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"max_retries"</span>),
 )
 
-wf = pipeline.<span style="color:#3fb950">compile</span>()  <span style="color:#8b949e"># → flat DAG</span>
+wf = pipeline.<span style="color:#3fb950">compile</span>()
 await <span style="color:#3fb950">WorkflowExecutor</span>(wf, proj).execute()
 
-<span style="color:#8b949e"># All factory — chess only provides</span>
-<span style="color:#8b949e"># build_pipeline() and evaluate()</span>
+<span style="color:#8b949e"># Opus proposes mutations each generation:</span>
+<span style="color:#8b949e"># rewrite the generator prompt to teach</span>
+<span style="color:#8b949e"># chess strategy from scratch</span>
 
 archive = <span style="color:#d29922">MAPElitesArchive</span>()
-reflector = <span style="color:#d29922">OuterLoopReflector</span>()
-strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
-
 <span style="color:#d29922">for</span> gen <span style="color:#d29922">in</span> range(1000):
-    report = reflector.<span style="color:#3fb950">reflect</span>(records)
-    parent = archive.<span style="color:#3fb950">sample_parent</span>(k=3)
-    wf, rec = <span style="color:#3fb950">apply_random_mutation</span>(
-        parent_wf, strategy, gen,
-        reflection_report=report,
-    )  <span style="color:#8b949e"># KNOB_MUTATE: guided by</span>
-       <span style="color:#8b949e"># knob-contrastive gradients</span>
-       <span style="color:#8b949e"># PROMPT_MUTATE: Opus rewrites</span>
-       <span style="color:#8b949e"># full prompts (replacement)</span>
-    score = <span style="color:#d29922">await</span> evaluate(wf)
-    archive.<span style="color:#3fb950">add</span>(ind, score)</pre>
+    reflection = <span style="color:#3fb950">opus_reflect</span>(results)
+    parents = archive.<span style="color:#3fb950">sample_parent</span>(k=5)
+    variants = <span style="color:#3fb950">opus_propose</span>(
+        parents, reflection,
+    )  <span style="color:#8b949e"># Opus rewrites the prompt</span>
+       <span style="color:#8b949e"># based on game analysis</span>
+    scores = <span style="color:#d29922">await</span> evaluate(variants)
+    archive.<span style="color:#3fb950">add</span>(best, score)</pre>
   </div>
 
   <div style="flex:1; min-width:300px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h3 style="color:#58a6ff; font-size:13px; margin-bottom:8px;">Pipeline Graph (per move)</h3>
+    <h3 style="color:#58a6ff; font-size:13px; margin-bottom:8px;">Starting Graph (per move)</h3>
     <pre style="color:#c9d1d9; font-size:11px; line-height:1.6; margin:0;">
- board_state.md
+ board + memory
        │
        ▼
- ┌─────────────┐
- │ <span style="color:#f0883e">phase gate</span>  │ <span style="color:#8b949e">Conditional</span>
- └──┬──┬──┬────┘
-    │  │  └→ <span style="color:#58a6ff">endgame</span>
-    │  └──→ <span style="color:#58a6ff">anal</span> ∥ <span style="color:#58a6ff">tact</span> ∥ <span style="color:#58a6ff">pos</span>
-    └────→ <span style="color:#58a6ff">opening</span>
-       │
-       ▼
- ┌───────────┐◄──╮
- │ <span style="color:#3fb950">selector</span>  │   │ <span style="color:#8b949e">verify ↺</span>
- └─────┬─────┘   │
-       ▼         │
- ┌───────────┐   │ critique +
- │ <span style="color:#d29922">verifier</span>  │───╯ blunder check
+ ┌───────────┐
+ │ <span style="color:#58a6ff">generator</span> │◄─╮
+ └─────┬─────┘  │ retry if
+       ▼        │ illegal
+ ┌───────────┐  │
+ │ <span style="color:#3fb950">legality</span>  │──╯
  └─────┬─────┘
        │ PROCEED
        ▼
@@ -239,59 +217,26 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
   <div style="flex:1; min-width:300px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
     <h3 style="color:#58a6ff; font-size:13px; margin-bottom:8px;">Optimization Surface</h3>
     <pre style="color:#c9d1d9; font-size:11px; line-height:1.5; margin:0;">
-<span style="color:#f0883e"># ── 10 tunable knobs ─────────────</span>
+<span style="color:#f0883e"># ── Starting point ──────────────</span>
+<span style="color:#8b949e"># One node. One generic prompt.</span>
+<span style="color:#8b949e"># No strategy, no tactics, no</span>
+<span style="color:#8b949e"># positional reasoning.</span>
 
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"analysis_style"</span>,
-  [<span style="color:#a5d6ff">"concise"</span>,<span style="color:#a5d6ff">"detailed"</span>,<span style="color:#a5d6ff">"threat_focused"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"tactical_style"</span>,
-  [<span style="color:#a5d6ff">"broad"</span>,<span style="color:#a5d6ff">"mate_focused"</span>,<span style="color:#a5d6ff">"material"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"positional_style"</span>,
-  [<span style="color:#a5d6ff">"classical"</span>,<span style="color:#a5d6ff">"dynamic"</span>,<span style="color:#a5d6ff">"prophylactic"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"selector_style"</span>,
-  [<span style="color:#a5d6ff">"balanced"</span>,<span style="color:#a5d6ff">"aggressive"</span>,<span style="color:#a5d6ff">"defensive"</span>,
-   <span style="color:#a5d6ff">"calculating"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"verify_style"</span>,
-  [<span style="color:#a5d6ff">"strict"</span>,<span style="color:#a5d6ff">"standard"</span>,<span style="color:#a5d6ff">"lenient"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"verify_iterations"</span>, [0..10])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"critique_style"</span>,
-  [<span style="color:#a5d6ff">"devils_advocate"</span>,<span style="color:#a5d6ff">"sanity_check"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"opening_hint"</span>,
-  [<span style="color:#a5d6ff">"principled"</span>,<span style="color:#a5d6ff">"aggressive"</span>,<span style="color:#a5d6ff">"solid"</span>,
-   <span style="color:#a5d6ff">"theory"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"middlegame_hint"</span>,
-  [<span style="color:#a5d6ff">"safety_first"</span>,<span style="color:#a5d6ff">"attacking"</span>,
-   <span style="color:#a5d6ff">"positional"</span>,<span style="color:#a5d6ff">"theory"</span>])
-<span style="color:#d29922">OptKnob</span>(<span style="color:#a5d6ff">"endgame_hint"</span>,
-  [<span style="color:#a5d6ff">"technical"</span>,<span style="color:#a5d6ff">"aggressive"</span>,
-   <span style="color:#a5d6ff">"defensive"</span>,<span style="color:#a5d6ff">"theory"</span>])
+<span style="color:#f0883e"># ── What Opus can change ────────</span>
 
-<span style="color:#f0883e"># ── Prompt mutation (free-form) ──</span>
-<span style="color:#8b949e"># Opus rewrites agent prompts each</span>
-<span style="color:#8b949e"># gen via default_prompt_rewriter.</span>
-<span style="color:#8b949e"># Full replacement, not append —</span>
-<span style="color:#8b949e"># can fix contradictions, remove</span>
-<span style="color:#8b949e"># bad advice, sharpen wording.</span>
+<span style="color:#8b949e"># Prompts</span>  — rewrite any node's
+  instructions from scratch
+<span style="color:#8b949e"># Nodes</span>   — add new agents with
+  new roles and prompts
+<span style="color:#8b949e"># Edges</span>   — change how nodes
+  connect and pass information
+<span style="color:#8b949e"># Knobs</span>   — tune parameters and
+  invent new ones
 
-<span style="color:#8b949e"># Starting prompts:</span>
-<span style="color:#8b949e"># tactician:</span>
-<span style="color:#a5d6ff">"Scan for tactical opportunities:</span>
-<span style="color:#a5d6ff"> forks, pins, skewers, hanging</span>
-<span style="color:#a5d6ff"> pieces, checkmate threats..."</span>
-
-<span style="color:#8b949e"># positionalist:</span>
-<span style="color:#a5d6ff">"Think about what the opponent</span>
-<span style="color:#a5d6ff"> wants to do. Suggest moves that</span>
-<span style="color:#a5d6ff"> prevent their plan..."</span>
-
-<span style="color:#8b949e"># verifier:</span>
-<span style="color:#a5d6ff">"Check for blunders: does this</span>
-<span style="color:#a5d6ff"> move hang a piece? Walk into a</span>
-<span style="color:#a5d6ff"> fork, pin, or skewer?"</span>
-
-<span style="color:#8b949e"># After each gen, Opus rewrites:</span>
-<span style="color:#d2a8ff">"Scan for tactical shots — BUT</span>
-<span style="color:#d2a8ff"> first check the opponent's most</span>
-<span style="color:#d2a8ff"> forcing reply to each candidate"</span></pre>
+<span style="color:#8b949e"># Every piece of chess knowledge</span>
+<span style="color:#8b949e"># in the evolved pipeline was</span>
+<span style="color:#8b949e"># discovered by Opus from game</span>
+<span style="color:#8b949e"># results — nothing is seeded.</span></pre>
   </div>
 </div>
 
@@ -303,7 +248,7 @@ strategy = <span style="color:#d29922">WeightedRandomStrategy</span>()
     <canvas id="elo-chart" width="900" height="180" style="width:100%; height:180px;"></canvas>
   </div>
   <div style="flex:1; min-width:250px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
-    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Archive Population</h2>
+    <h2 style="color:#58a6ff; font-size:14px; margin-bottom:8px;">Leaderboard</h2>
     <div id="mutation-dist"></div>
   </div>
 </div>
@@ -402,39 +347,62 @@ function formatTooltip(g) {
 }
 
 function formatCardTooltip(g) {
-  // Check if there's a log entry with prompt mutation detail
   const tag = g.tag || '';
   const baseTag = tag.replace(/:g\d+\([WB]\)$/, '');
+  const esc = s => (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const logEntry = logEntries.find(
-    e => e.mutation && e.mutation.operator === 'prompt_mutate'
+    e => e.mutation
       && e.label && (e.label === baseTag || e.label === baseTag + ':mut')
   );
-  if (logEntry && logEntry.mutation.after) {
-    const m = logEntry.mutation;
-    const esc = s => (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<b style="color:#58a6ff;">PROMPT MUTATION</b> on <b>${m.node}</b><br><br>`
-      + `<span style="color:#f85149;">Before:</span><br><span style="color:#8b949e;">${esc(m.before)}</span><br><br>`
-      + `<span style="color:#3fb950;">After:</span><br><span style="color:#c9d1d9;">${esc(m.after)}</span>`;
+  if (!logEntry || !logEntry.mutation) return formatTooltip(g);
+  const m = logEntry.mutation;
+
+  // Pipeline proposal — show each node's prompt
+  if (m.node_prompts && Object.keys(m.node_prompts).length > 0) {
+    const nodeColors = ['#58a6ff', '#3fb950', '#d29922', '#bc8cff', '#f0883e'];
+    const nodes = m.nodes || Object.keys(m.node_prompts);
+    let html = `<b style="color:#58a6ff;">PIPELINE</b> (${nodes.length} node${nodes.length > 1 ? 's' : ''})<br>`;
+    html += `<span style="color:#484f58;">${nodes.join(' → ')}</span><br>`;
+    nodes.forEach((nid, i) => {
+      const prompt = m.node_prompts[nid];
+      if (prompt) {
+        const color = nodeColors[i % nodeColors.length];
+        html += `<br><b style="color:${color};">${nid}</b><br>`;
+        html += `<span style="color:#c9d1d9;">${esc(prompt)}</span><br>`;
+      }
+    });
+    return html;
   }
+
+  // Single-node prompt mutation
+  if (m.after) {
+    let html = `<b style="color:#58a6ff;">PROMPT</b> on <b>${m.node}</b><br>`;
+    if (m.before) {
+      html += `<br><span style="color:#f85149;">Before:</span><br><span style="color:#8b949e;">${esc(m.before)}</span><br>`;
+    }
+    html += `<br><span style="color:#3fb950;">After:</span><br><span style="color:#c9d1d9;">${esc(m.after)}</span>`;
+    return html;
+  }
+
+  // Knob change — show only changed knobs
+  if (m.operator === 'knobs') {
+    return Object.entries(m).filter(([k]) => k !== 'operator' && k !== 'node')
+      .map(([k, v]) => `<b style="color:#d29922;">${k}=${v}</b>`).join('<br>');
+  }
+
   return formatTooltip(g);
 }
 
 function renderNodeOutputs(outputs) {
   const labels = {
-    'board_analyst': 'Analyst',
-    'tactician': 'Tactician',
-    'positionalist': 'Positionalist',
-    'selector': 'Selector',
-    'verifier': 'Verifier',
+    'generator': 'Generator',
+    'legality_gate': 'Legality',
   };
   const colors = {
-    'board_analyst': '#58a6ff',
-    'tactician': '#f0883e',
-    'positionalist': '#3fb950',
-    'selector': '#d29922',
-    'verifier': '#bc8cff',
+    'generator': '#58a6ff',
+    'legality_gate': '#3fb950',
   };
-  const order = ['board_analyst', 'tactician', 'positionalist', 'selector', 'verifier'];
+  const order = ['generator'];
   const sorted = order.filter(k => k in outputs);
   for (const k of Object.keys(outputs)) {
     if (!sorted.includes(k)) sorted.push(k);
@@ -472,6 +440,27 @@ const pipelineNodesCache = {}; // tag -> node list (accumulates during game, loc
 const collapsedGens = {};
 const agentViewCards = {};
 const _seenOutputs = {};
+
+function renderPipelineTag(tag, opts) {
+  // Handles both "Gen 1.1: a → b:g1(W)" and "Gen 1.1: a → b"
+  const gameMatch = tag.match(/^(Gen \d+\.\d+): (.+?):(g\d+\([WB]\))$/);
+  const logMatch = !gameMatch && tag.match(/^(Gen \d+\.\d+): (.+)$/);
+  const match = gameMatch || logMatch;
+  if (!match) return tag;
+  const genLabel = match[1];
+  const pipelinePart = match[2];
+  const gameId = gameMatch ? match[3] : '';
+  const nodeColors = ['#58a6ff', '#3fb950', '#d29922', '#bc8cff', '#f0883e'];
+  const nodes = pipelinePart.split(' → ');
+  if (nodes.length <= 1 && !pipelinePart.includes('prompt(') && !pipelinePart.includes('+node')) {
+    return tag;
+  }
+  const colored = nodes.map((n, i) =>
+    `<span style="color:${nodeColors[i % nodeColors.length]};font-weight:bold;">${n}</span>`
+  ).join(' <span style="color:#484f58;">→</span> ');
+  const suffix = gameId ? ` <span style="color:#484f58;">${gameId}</span>` : '';
+  return `<span style="color:#8b949e;">${genLabel}:</span> ${colored}${suffix}`;
+}
 
 let _uiTimer = null;
 function updateGrid() {
@@ -589,9 +578,9 @@ function _updateUI() {
     html += `
       <div class="game-card ${resultClass}" id="${cardId}">
         <div style="margin-bottom:4px;">
-          <div class="game-header">
-            <span class="game-tag">${g.tag}<span class="tooltip">${formatCardTooltip(g)}</span></span>
-            <span class="game-result ${resultClass}">${resultText}</span>
+          <div class="game-header" style="flex-direction:column;align-items:flex-start;gap:2px;">
+            <span class="game-tag" style="font-size:12px;">${renderPipelineTag(g.tag)}<span class="tooltip">${formatCardTooltip(g)}</span></span>
+            <span class="game-result ${resultClass}" style="font-size:12px;">${resultText}</span>
           </div>
           ${hasOutputs ? `<div style="display:flex;justify-content:flex-end;margin-top:2px;">
             <span style="display:inline-flex;border:1px solid #30363d;border-radius:4px;overflow:hidden;font-size:12px;">
@@ -903,9 +892,9 @@ function updateLog() {
       const before = e.mutation.before || '';
       const after = e.mutation.after || '';
       const tip = `Node: ${e.mutation.node}\nBefore: ${before}...\nAfter: ${after}...`;
-      html += `<td style="cursor:help;" title="${tip.replace(/"/g, '&quot;')}">${e.label} 📝</td>`;
+      html += `<td style="cursor:help;" title="${tip.replace(/"/g, '&quot;')}">${renderPipelineTag(e.label)} 📝</td>`;
     } else {
-      html += `<td>${e.label}</td>`;
+      html += `<td>${renderPipelineTag(e.label)}</td>`;
     }
     html += `<td>+${e.wins}=${e.draws}-${e.losses}</td>`;
     html += `<td class="log-score">${sc >= 0 ? '+' : ''}${Math.round(sc)}</td>`;
@@ -1148,20 +1137,31 @@ function updateMutationDist() {
   for (const e of archiveEntries) {
     const sc = Math.round(e.score ?? 0);
     const color = sc >= 0 ? '#3fb950' : sc > -100 ? '#d29922' : '#f85149';
-    // Show all config tokens that differ from seed
-    const tokens = (e.config || '').split(' ');
-    const diffs = tokens.filter(t => !seedTokens.has(t) && t.includes('='));
-    const extras = tokens.filter(t => !t.includes('=') && t !== '');
+    // Extract pipeline description from the label
+    const labelMatch = (e.label || '').match(/^Gen \d+\.\d+: (.+)$/);
+    const pipelineDesc = labelMatch ? labelMatch[1] : (e.config || 'seed');
+    const nodeColors = ['#58a6ff', '#3fb950', '#d29922', '#bc8cff', '#f0883e'];
+    const pipelineNodes = pipelineDesc.split(' → ');
     const parts = [];
-    for (const d of diffs) parts.push(`<span style="color:#d29922">${d}</span>`);
-    for (const x of extras) parts.push(`<span style="color:#d29922">${x}</span>`);
-    // Check for prompt mutations (direct or inherited)
-    const mutNode = e.mutation?.node;
-    const isPrompt = (e.label || '').includes('Mutated prompt');
-    if (isPrompt && mutNode) {
-      parts.push(`<span style="color:#bc8cff">✎ ${mutNode}</span>`);
-    } else if (parts.length === 0 && e.gen > 0) {
-      // No knob diffs — must be a prompt variant or inherited prompt
+    if (pipelineNodes.length > 1 || (pipelineDesc !== 'seed' && e.gen > 0)) {
+      const colored = pipelineNodes.map((n, i) =>
+        `<span style="color:${nodeColors[i % nodeColors.length]}">${n}</span>`
+      ).join(' <span style="color:#484f58;">→</span> ');
+      // Add short prompt preview for single-node pipelines to distinguish variants
+      const prompts = e.mutation?.node_prompts;
+      const firstPrompt = prompts && Object.values(prompts)[0];
+      const preview = firstPrompt && pipelineNodes.length === 1
+        ? ` <span style="color:#484f58;">"${firstPrompt.slice(0, 30)}…"</span>` : '';
+      parts.push(colored + preview);
+    }
+    // Fallback for old-style knob diffs
+    if (parts.length === 0) {
+      const seedTokens_inner = new Set(['seed']);
+      const tokens = (e.config || '').split(' ');
+      const diffs = tokens.filter(t => !seedTokens_inner.has(t) && t.includes('='));
+      for (const d of diffs) parts.push(`<span style="color:#d29922">${d}</span>`);
+    }
+    if (parts.length === 0) {
       const mutLabel = (e.label || '').replace(/^Gen \d+\.\d+: /, '');
       if (mutLabel.includes('prompt')) {
         const node = mutLabel.match(/on (\w+)/)?.[1] || '?';

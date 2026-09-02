@@ -9,11 +9,8 @@ import random
 import shutil
 import time
 
-from factory.cycle_analyzer import CycleRecord
-from factory.outer_loop.models import MutationType
-from factory.outer_loop.mutations import WeightedRandomStrategy, apply_random_mutation
-from factory.outer_loop.population import MAPElitesArchive, Population
-from factory.outer_loop.reflector import OuterLoopReflector
+
+from dataclasses import dataclass, field
 
 from chess_evolve.broadcast import broadcast_archive, broadcast_eval_result
 from chess_evolve.config import CANDIDATES_PER_GEN, GAMES_PER_EVAL, LIVE_DIR
@@ -22,6 +19,17 @@ from chess_evolve.engine import _cli_call_opus
 from chess_evolve.game import EvalResult, evaluate_pipeline
 from chess_evolve.pipeline import _PROMPT_NODES, KNOB_SPACE, PipelineConfig, build_pipeline
 from chess_evolve.prompts import PROMPT_REGISTRY, _get_prompt, _register_prompt
+
+
+@dataclass
+class LeaderboardEntry:
+    id: str
+    label: str
+    cfg: PipelineConfig
+    pipeline: Package
+    score: float
+    gen: int
+    prompts: dict[str, str] = field(default_factory=dict)
 
 
 def mutate_knobs(
@@ -90,6 +98,87 @@ def _extract_json_objects(raw: str) -> list[dict]:
     return objects
 
 
+def _build_pipeline_from_spec(
+    nodes_spec: list[dict], cfg: PipelineConfig,
+) -> Package:
+    """Build a pipeline from an Opus-designed node spec."""
+    from factory.workflow.package import (
+        Loop,
+        MemoryDeclaration,
+        Package,
+        Port,
+        Sequential,
+        StateContract,
+    )
+    from factory.workflow.primitives import AgentNode, AgentRole, GateNode, Workflow
+
+    pkgs = []
+    for spec in nodes_spec:
+        nid = spec["id"]
+        prompt = spec.get("prompt", "")
+        reads = set(spec.get("reads", [".factory/chess/board_state.md"]))
+        reads.add(".factory/chess/memory.md")
+        writes_path = spec.get("writes", f".factory/chess/{nid}.md")
+        node = AgentNode(
+            id=nid, role=AgentRole.RESEARCHER,
+            prompt_template=prompt,
+            reads=reads,
+            writes={writes_path},
+        )
+        pkg = Package(
+            name=nid, version="1.0.0",
+            inputs=[Port(name="board", artifact_path=".factory/chess/board_state.md")],
+            outputs=[Port(name=nid, artifact_path=writes_path)],
+            contract=StateContract(produces=frozenset({f"{nid}_complete"})),
+            graph=Workflow(name=nid, nodes={nid: node}, edges=[], start_node=nid),
+            entry_node=nid, exit_node=nid,
+        )
+        pkgs.append(pkg)
+
+    if not pkgs:
+        return build_pipeline(cfg)
+
+    # Add memory declaration to the first package
+    pkgs[0] = pkgs[0].model_copy(update={"memory": [MemoryDeclaration(
+        namespace="game_reasoning", kind="log",
+        schema_def={"move": "int", "output": "str"},
+        retention="ephemeral",
+    )]})
+
+    if len(pkgs) == 1:
+        body = pkgs[0]
+    else:
+        body = Sequential(*pkgs, name="chess-agents")
+
+    from chess_evolve.pipeline import GENERATOR_PROMPT
+    legality_gate = GateNode(
+        id="legality_gate",
+        evaluator_type="fn",
+        evaluator_command=(
+            "python3 -c '"
+            "from pathlib import Path; "
+            "import chess; "
+            "board_text = Path(\"{project_path}/.factory/chess/"
+            "board_state.md\").read_text(); "
+            "fen_line = [l for l in board_text.split(chr(10)) "
+            "if l.startswith(\"Position\") or l.startswith(\"FEN\")]; "
+            "fen = fen_line[0].split(\": \", 1)[1].strip() if fen_line "
+            "else board_text.split(chr(10))[0].split(\": \", 1)[-1].strip(); "
+            "board = chess.Board(fen); "
+            "legal = [m.uci() for m in board.legal_moves]; "
+            "move_text = Path(\"{project_path}/.factory/chess/"
+            "move.md\").read_text().strip(); "
+            "tokens = move_text.replace(chr(10), \" \").split(); "
+            "found = next((t.strip(\".,!()\\\"\\x27\") for t in tokens "
+            "if t.strip(\".,!()\\\"\\x27\") in legal), None); "
+            "print(\"PROCEED\" if found else \"RELOOP\")"
+            "'"
+        ),
+    )
+
+    return Loop(body, legality_gate, max_iterations=cfg.max_retries, name="move-loop")
+
+
 def parse_opus_proposals(
     raw: str, best_cfg: PipelineConfig, gen: int,
 ) -> list[tuple[str, PipelineConfig, object, int, dict]]:
@@ -99,33 +188,41 @@ def parse_opus_proposals(
         try:
             n_games = prop.get("games", GAMES_PER_EVAL)
             prompt_meta: dict = {}
-            if "node" in prop and "prompt" in prop:
-                # Format 2: prompt rewrite — {"node": "selector", "prompt": "..."}
+            child_cfg = dataclasses.replace(best_cfg)
+
+            if "pipeline" in prop and isinstance(prop["pipeline"], list):
+                nodes_spec = prop["pipeline"]
+                pipeline = _build_pipeline_from_spec(nodes_spec, child_cfg)
+                node_names = [n["id"] for n in nodes_spec]
+                desc = " → ".join(node_names)
+                node_prompts = {
+                    n["id"]: n.get("prompt", "")
+                    for n in nodes_spec if n.get("prompt")
+                }
+                prompt_meta = {
+                    "operator": "pipeline",
+                    "nodes": node_names,
+                    "node_count": len(node_names),
+                    "node_prompts": node_prompts,
+                }
+                for n in nodes_spec:
+                    if n.get("prompt"):
+                        print(f"  {CYAN}NODE: {n['id']} ({len(n['prompt'])} chars){RESET}")
+            elif "node" in prop and "prompt" in prop and "node" != "add_node":
                 node = prop["node"]
                 prompt_text = prop["prompt"]
-                if node not in _PROMPT_NODES:
-                    continue
-                NODE_TO_KNOB = {
-                    "board_analyst": "analysis_style",
-                    "tactician": "tactical_style",
-                    "positionalist": "positional_style",
-                    "selector": "selector_style",
-                    "verifier": "verify_style",
-                }
-                style_knob = NODE_TO_KNOB.get(node, f"{node}_style")
-                old_val = getattr(best_cfg, style_knob, "")
-                old_prompt = _get_prompt(style_knob, old_val)
                 value = f"opus_g{gen}_{len(candidates)+1}"
+                style_knob = f"{node}_style"
                 _register_prompt(style_knob, value, prompt_text)
                 for _, (kn, choices) in enumerate(KNOB_SPACE):
                     if kn == style_knob and value not in choices:
                         choices.append(value)
-                child_cfg = dataclasses.replace(best_cfg, **{style_knob: value})
+                if hasattr(child_cfg, style_knob):
+                    child_cfg = dataclasses.replace(child_cfg, **{style_knob: value})
+                pipeline = build_pipeline(child_cfg)
                 desc = f"prompt({node})"
-                prompt_meta = {
-                    "node": node, "before": old_prompt, "after": prompt_text,
-                }
-                print(f"  {CYAN}NEW PROMPT: {node} -> {style_knob}={value}{RESET}")
+                prompt_meta = {"node": node, "after": prompt_text}
+                print(f"  {CYAN}PROMPT: {node} -> {style_knob}={value}{RESET}")
             elif "knobs" in prop and isinstance(prop["knobs"], dict):
                 overrides = {k: v for k, v in prop["knobs"].items() if hasattr(best_cfg, k)}
                 for _, (kn, choices) in enumerate(KNOB_SPACE):
@@ -133,27 +230,14 @@ def parse_opus_proposals(
                         if kn == k and v not in choices:
                             choices.append(v)
                 child_cfg = dataclasses.replace(best_cfg, **overrides)
+                pipeline = build_pipeline(child_cfg)
                 desc = " + ".join(f"{k}={v}" for k, v in overrides.items())
-            elif prop.get("rerun"):
-                child_cfg = dataclasses.replace(best_cfg)
-                desc = "rerun (variance check)"
-            elif "knob" in prop:
-                knob, value = prop["knob"], prop["value"]
-                if not hasattr(best_cfg, knob):
-                    continue
-                if "prompt" in prop and isinstance(prop["prompt"], str):
-                    _register_prompt(knob, value, prop["prompt"])
-                    print(f"  {CYAN}NEW PROMPT: {knob}={value}{RESET}")
-                for _, (kn, choices) in enumerate(KNOB_SPACE):
-                    if kn == knob and value not in choices:
-                        choices.append(value)
-                child_cfg = dataclasses.replace(best_cfg, **{knob: value})
-                desc = f"{knob}={value}"
             else:
                 continue
+
             candidates.append((
                 f"Gen {gen}.{len(candidates)+1}: {desc}",
-                child_cfg, build_pipeline(child_cfg), n_games, prompt_meta,
+                child_cfg, pipeline, n_games, prompt_meta,
             ))
         except Exception:
             continue
@@ -208,84 +292,75 @@ async def main():
     seed_result = await evaluate_pipeline(seed, seed_cfg, eval_tag="seed", gen=0)
     print(f"  {WHITE}Gen 0:{RESET} {seed_result.win_rate} score={seed_result.composite_score:+.0f}")
 
-    archive = MAPElitesArchive()
-    seed_ind = Population.make_individual(
-        seed.compile(), generation=0, score=seed_result.composite_score
-    )
-    archive.add(seed_ind)
-    ind_configs: dict[str, PipelineConfig] = {seed_ind.id: seed_cfg}
-    ind_prompts: dict[str, dict[str, str]] = {}
-    ind_labels: dict[str, str] = {seed_ind.id: "Gen 0 (seed)"}
+    LEADERBOARD_SIZE = 5
+    seed_id = f"seed_{id(seed_cfg)}"
+    leaderboard: list[LeaderboardEntry] = [
+        LeaderboardEntry(
+            id=seed_id, label="Gen 0 (seed)", cfg=seed_cfg,
+            pipeline=seed, score=seed_result.composite_score, gen=0,
+        )
+    ]
     broadcast_eval_result(
         f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result,
         gen=0, is_best=True, in_archive=True,
     )
 
-    reflector = OuterLoopReflector(k=3)
     score_trajectory: list[float] = [seed_result.composite_score]
-    cycle_records: dict[str, CycleRecord] = {seed_ind.id: seed_result.to_cycle_record(0)}
     all_results: list[tuple[str, PipelineConfig, EvalResult, float]] = [
         (f"Gen 0: {seed_cfg.label}", seed_cfg, seed_result, seed_result.composite_score),
     ]
 
     # Evolutionary loop
     for gen in range(1, 1001):
-        best_ind = archive.best()
-        best_score = best_ind.score if best_ind else 0
-        header(f"GEN {gen} -- archive: {archive.size} cells, best={best_score:+.0f}")
+        best_score = leaderboard[0].score if leaderboard else 0
+        header(f"GEN {gen} -- top {len(leaderboard)}, best={best_score:+.0f}")
 
-        # Step 1: Contrastive reflection
+        # Step 1: Build rich context for reflection
         all_sorted = sorted(all_results, key=lambda x: x[3], reverse=True)
-        def _fmt(label, cfg, r, s):
-            return (
-                f"  {cfg.label}: {r.win_rate} "
-                f"avg={r.avg_eval:+.0f}cp "
-                f"blun={r.blunder_count} mv={r.total_moves} "
-                f"score={s:+.0f}"
-            )
+
+        def _game_summary(label, cfg, r, s):
+            pipe_label = label.split(": ", 1)[-1] if ": " in label else label
+            illegal = sum(len(g.get("illegal_moves", [])) for g in r.games)
+            lines = [f"  {pipe_label}: score={s:+.0f} {r.win_rate} "
+                     f"avg={r.avg_eval:+.0f}cp blun={r.blunder_count} "
+                     f"mv={r.total_moves}"
+                     + (f" ILLEGAL={illegal}" if illegal else "")]
+            for g in r.games[:1]:
+                moves = g.get("move_list", [])
+                curve = g.get("eval_curve", [])
+                move_str = " ".join(
+                    f"{i // 2 + 1}.{moves[i]}"
+                    + (f" {moves[i+1]}" if i + 1 < len(moves) else "")
+                    for i in range(0, len(moves), 2)
+                )[:150]
+                lines.append(f"    Moves: {move_str}")
+                if curve:
+                    curve_str = ",".join(f"{c:+d}" for c in curve[-8:])
+                    lines.append(f"    Eval (last 8): [{curve_str}]")
+                blunders = []
+                for j in range(1, len(curve)):
+                    if curve[j] - curve[j-1] < -200 and j < len(moves):
+                        blunders.append(
+                            f"move {j//2+1} {moves[j]}: "
+                            f"{curve[j-1]:+d} → {curve[j]:+d}cp"
+                        )
+                if blunders:
+                    lines.append(f"    Blunders: {'; '.join(blunders[:3])}")
+            return "\n".join(lines)
+
         if all_results:
-            top = [_fmt(*e) for e in all_sorted[:10]]
-            bottom = [_fmt(*e) for e in all_sorted[-10:]]
+            top = [_game_summary(*e) for e in all_sorted[:5]]
+            bottom = [_game_summary(*e) for e in all_sorted[-3:]]
             history = (
-                "TOP 10 (best):\n" + "\n".join(top)
-                + "\n\nBOTTOM 10 (worst):\n" + "\n".join(bottom)
+                "BEST 5:\n" + "\n".join(top)
+                + "\n\nWORST 3:\n" + "\n".join(bottom)
             )
         else:
             history = "(seed run)"
 
-        reflection_report = None
         reflection = ""
-        if cycle_records:
-            record_ids = list(cycle_records.keys())
-            records = [(iid, cycle_records[iid].score_end or 0, cycle_records[iid])
-                       for iid in record_ids]
-            knob_vals = {}
-            for iid in record_ids:
-                cfg = ind_configs.get(iid)
-                if cfg:
-                    vals = {k: getattr(cfg, k) for k, _ in KNOB_SPACE if hasattr(cfg, k)}
-                    prompts = ind_prompts.get(iid, {})
-                    for node, prompt in prompts.items():
-                        vals[f"prompt_{node}"] = prompt[:100]
-                    knob_vals[iid] = vals
-            # Factory's structural reflector (for guided mutations)
-            try:
-                reflection_report = reflector.reflect(
-                    records, gen, knob_values_by_id=knob_vals,
-                )
-                if reflection_report.mutation_suggestions:
-                    sug = '; '.join(
-                        reflection_report.mutation_suggestions[:3],
-                    )
-                    for iid, lbl in ind_labels.items():
-                        sug = sug.replace(iid[:8], lbl)
-                    print(
-                        f"\n  {DIM}Knob gradients: {sug}{RESET}"
-                    )
-            except Exception as exc:
-                print(f"  {DIM}(reflector error: {exc}){RESET}")
 
-        # Opus reflection (primary — reads game data)
+        # Opus reflection — reads game data, moves, blunders
         if all_results:
             refl_system = (
                 "You are a chess coach analyzing an AI's games. "
@@ -293,16 +368,14 @@ async def main():
                 "3-4 sentences."
             )
             refl_user = (
-                f"SCORING: Sum of centipawn evals while above "
-                f"-500cp (stops counting at first dip below). "
-                f"Higher = longer survival with better positions. "
-                f"Draws add 100K, wins add 200K.\n\n"
+                f"SCORING: Sum of (cp+500)/1000 while eval > -500cp. "
+                f"Draws +100K, wins +200K. Higher = better.\n\n"
                 f"{history}\n\n"
-                f"Archive: {archive.size} cells, "
-                f"best={best_score:+.0f}\n\n"
-                f"What causes the eval to crash below "
-                f"-500cp? What concrete change would help "
-                f"the AI survive longer?"
+                f"Best score: {best_score:+.0f}\n\n"
+                f"Analyze the move sequences and eval curves. "
+                f"What specific moves or patterns cause the eval "
+                f"to crash? What concrete change to the prompts "
+                f"or pipeline would help?"
             )
             refl_input_path = LIVE_DIR / f"_opus_reflection_gen{gen}.txt"
             refl_input_path.write_text(
@@ -325,192 +398,113 @@ async def main():
             except Exception:
                 pass
 
-        # Game-aware prompt hints from blunder analysis
-        if reflection_report and all_results:
-            worst = sorted(all_results, key=lambda x: x[3])[:3]
-            blunder_details = []
-            for _, cfg, result, score in worst:
-                for g in result.games:
-                    curve = g.get("eval_curve", [])
-                    moves = g.get("move_list", [])
-                    for i in range(1, len(curve)):
-                        if curve[i] - curve[i-1] < -200 and i < len(moves):
-                            blunder_details.append(
-                                f"Move {i}: {moves[i]} dropped {curve[i-1]:+d}cp to {curve[i]:+d}cp"
-                            )
-            if blunder_details:
-                try:
-                    coach_prompt = (
-                        "You are a chess coach. Write ONE sentence"
-                        " of advice to prevent these blunders. "
-                        "Be specific about the pattern."
-                    )
-                    coach_user = "Recent blunders:\n" + "\n".join(blunder_details[:8])
-                    (LIVE_DIR / f"_opus_coach_gen{gen}.txt").write_text(
-                        f"=== SYSTEM ===\n{coach_prompt}\n\n"
-                        f"=== USER ({len(coach_user)} chars) ===\n{coach_user}"
-                    )
-                    hint = (await _cli_call_opus(
-                        coach_prompt, coach_user,
-                    )).strip()
-                    if hint and reflection_report:
-                        reflection_report.prompt_improvements.append(hint)
-                        print(f"  {CYAN}Prompt hint:{RESET} {hint}")
-                except Exception:
-                    pass
-
-        # Step 2: Generate candidates — 4 Opus-driven + 1 random
+        # Step 2: Generate candidates — Opus-driven
         candidates = []
-        prompt_nodes = ", ".join(_PROMPT_NODES)
+        # 2a: Use leaderboard as parents — fill to CANDIDATES_PER_GEN
+        lb_parents = list(leaderboard[:CANDIDATES_PER_GEN])
+        while len(lb_parents) < CANDIDATES_PER_GEN:
+            lb_parents.append(leaderboard[0])
 
-        # 2a: Opus proposes 4 variants, each from a rank-weighted parent
-        OPUS_SLOTS = 4
-        for slot in range(OPUS_SLOTS):
-            parent = archive.sample_parent(
-                tournament_size=5, rank_weighted=True,
-            )
-            if parent is None:
-                continue
-            parent_cfg = ind_configs.get(parent.id, seed_cfg)
-            parent_label = ind_labels.get(parent.id, "seed")
-            knob_desc = "\n".join(
-                f"  {name}: current={getattr(parent_cfg, name)}, options={choices}"
-                for name, choices in KNOB_SPACE
-            )
+        if lb_parents:
+            parent_descs = []
+            for i, p in enumerate(lb_parents):
+                wf = p.pipeline.compile()
+                # Serialize parent as the same JSON format Opus outputs
+                node_specs = []
+                for nid, node in wf.nodes.items():
+                    if not hasattr(node, "prompt_template"):
+                        continue
+                    spec: dict = {"id": nid}
+                    if node.prompt_template:
+                        spec["prompt"] = node.prompt_template
+                    if hasattr(node, "reads") and node.reads:
+                        spec["reads"] = sorted(node.reads)
+                    if hasattr(node, "writes") and node.writes:
+                        spec["writes"] = sorted(node.writes)[0]
+                    node_specs.append(spec)
+                parent_json = json.dumps(
+                    {"parent": i + 1, "pipeline": node_specs},
+                    indent=2,
+                )
+                parent_descs.append(
+                    f"  PARENT {i+1}: {p.label} (score={p.score:+.0f})\n"
+                    f"  Current pipeline (modify this):\n{parent_json}"
+                )
             opus_system = (
                 "You are an optimizer for a chess AI pipeline. "
-                "Propose exactly 1 experiment variant as a single JSON object. "
-                "No other text — just 1 JSON object."
+                f"Propose exactly {len(lb_parents)} experiment variants, "
+                "one JSON object per line — one mutation per parent. "
+                "No other text — just JSON lines."
             )
             opus_user = (
                 f"SCORING: Sum of (cp+500)/1000 while above -500cp. "
                 f"Draws +100K, wins +200K. Higher = better.\n\n"
                 f"RESULTS:\n{history}\n\n"
                 f"REFLECTION:\n{reflection or '(none)'}\n\n"
-                f"PARENT: {parent_label} (score={parent.score:+.0f})\n"
-                f"CONFIG:\n{knob_desc}\n\n"
-                f"PROMPT-MUTABLE NODES: {prompt_nodes}\n\n"
-                f"Output 1 JSON object. "
-                f"{'Use FORMAT 2 (prompt rewrite).' if slot == 0 else 'Use either format.'}\n\n"
-                f"FORMAT 1 — Knob change (one or more knobs):\n"
-                f'  {{"knobs": {{"tactical_style": "material", "candidate_moves": 3}}}}\n\n'
-                f"FORMAT 2 — Prompt rewrite (rewrites one agent's prompt):\n"
-                f'  {{"node": "selector", "prompt": "You are a chess move selector. ..."}}\n'
-                f"  Valid nodes: {prompt_nodes}\n"
-                f"  Write the COMPLETE new prompt — it replaces the existing one.\n\n"
-                f"IMPORTANT: Do NOT mix formats. Use format 1 for knobs, "
-                f"format 2 for prompts.\n\n"
-                f"Base the proposal on the reflection. "
-                f"Prompt rewrites are the most powerful lever — "
-                f"they change HOW agents think, not just parameters."
+                f"PARENTS — each shows its current pipeline as JSON. "
+                f"Modify the pipeline and output your variant.\n\n"
+                + "\n\n".join(parent_descs) + "\n\n"
+                f"INSTRUCTIONS:\n"
+                f"- Output {len(lb_parents)} JSON objects, one per parent\n"
+                f"- Each must have {{'parent': N, 'pipeline': [...]}}\n"
+                f"- Modify the parent's pipeline: change prompts, "
+                f"add nodes, remove nodes, rewire reads\n"
+                f"- Nodes execute sequentially; last MUST write "
+                f"to .factory/chess/move.md\n"
+                f"- board_state.md and memory.md are auto-available\n"
+                f"- Keep changes small — mutate 1-2 things per parent\n"
+                f"- The goal: teach better chess through prompts "
+                f"and architecture\n"
+                f"- NOTE: A system prompt enforces a 100-word output "
+                f"limit on all nodes. Write prompts that elicit "
+                f"SHORT, decisive responses — not long analysis."
             )
-            if slot == 0:
-                (LIVE_DIR / f"_opus_proposals_gen{gen}.txt").write_text(
-                    f"=== SYSTEM ===\n{opus_system}\n\n"
-                    f"=== USER ({len(opus_user)} chars) ===\n{opus_user}"
-                )
+            (LIVE_DIR / f"_opus_proposals_gen{gen}.txt").write_text(
+                f"=== SYSTEM ===\n{opus_system}\n\n"
+                f"=== USER ({len(opus_user)} chars) ===\n{opus_user}"
+            )
             try:
                 raw = await _cli_call_opus(opus_system, opus_user)
                 if raw:
-                    parsed = parse_opus_proposals(raw, parent_cfg, gen)
-                    if parsed:
-                        label, cfg, pipeline, n_games, pmeta = parsed[0]
-                        label = f"Gen {gen}.{len(candidates)+1}: {label.split(': ', 1)[-1]}"
-                        mut_detail = {
-                            "operator": "opus_guided",
-                            "node": pmeta.get("node", ""),
-                            **pmeta,
-                        }
-                        print(f"  {CYAN}> {label} [OPUS from {parent_label}]{RESET}")
-                        candidates.append((label, cfg, pipeline, mut_detail))
+                    for obj in _extract_json_objects(raw):
+                        pidx = obj.pop("parent", 1) - 1
+                        pidx = max(0, min(pidx, len(lb_parents) - 1))
+                        parent_cfg = lb_parents[pidx].cfg
+                        parent_label = lb_parents[pidx].label
+                        parsed = parse_opus_proposals(
+                            json.dumps(obj), parent_cfg, gen,
+                        )
+                        if parsed:
+                            label, cfg, pipeline, n_games, pmeta = parsed[0]
+                            label = (
+                                f"Gen {gen}.{len(candidates)+1}: "
+                                f"{label.split(': ', 1)[-1]}"
+                            )
+                            mut_detail = {
+                                "operator": "opus_guided",
+                                "node": pmeta.get("node", ""),
+                                **pmeta,
+                            }
+                            print(f"  {CYAN}> {label} [OPUS from {parent_label}]{RESET}")
+                            candidates.append((label, cfg, pipeline, mut_detail))
             except Exception as exc:
-                print(f"  {DIM}(opus slot {slot+1} failed: {exc}){RESET}")
+                print(f"  {DIM}(opus proposals failed: {exc}){RESET}")
 
-        # 2b: Fill remaining slots with random mutations
-        strategy = WeightedRandomStrategy(weights={
-            MutationType.NODE_INSERT.value: 0,
-            MutationType.NODE_REMOVE.value: 0,
-            MutationType.EDGE_REDIRECT.value: 0,
-            MutationType.PARALLELIZE.value: 0,
-            MutationType.SERIALIZE.value: 0,
-            MutationType.PARAM_MUTATE.value: 0,
-            MutationType.PROMPT_MUTATE.value: 0.50,
-            MutationType.KNOB_MUTATE.value: 0.50,
-        })
-        random_attempts = 0
-        while len(candidates) < CANDIDATES_PER_GEN and random_attempts < 20:
-            random_attempts += 1
-            parent = archive.sample_parent(
-                tournament_size=5, rank_weighted=True,
-            )
-            if parent is None:
-                continue
-            parent_cfg = ind_configs.get(parent.id, seed_cfg)
-            parent_wf = build_pipeline(parent_cfg).compile()
-            mut = apply_random_mutation(
-                parent_wf, strategy, gen,
-                reflection_report=reflection_report,
-            )
-            if mut is None:
-                continue
-            child_wf, rec = mut
+        if not candidates:
+            print(f"  {DIM}(no candidates generated){RESET}")
 
-            def _coerce_back(k, v):
-                orig = getattr(parent_cfg, k, None)
-                if isinstance(orig, bool):
-                    return v == "True" if isinstance(v, str) else bool(v)
-                if isinstance(orig, int):
-                    return int(v) if not isinstance(v, int) else v
-                return v
-
-            overrides = {
-                k: _coerce_back(k, v)
-                for k, v in child_wf.knob_values.items()
-                if hasattr(parent_cfg, k)
-                and getattr(parent_cfg, k) != _coerce_back(k, v)
-            }
-            if overrides:
-                child_cfg = dataclasses.replace(parent_cfg, **overrides)
-                desc = " + ".join(f"{k}={v}" for k, v in overrides.items())
-            else:
-                child_cfg = parent_cfg
-                desc = rec.rationale or "no-op"
-            child_pipeline = build_pipeline(child_cfg)
-            for k, v in child_wf.knob_values.items():
-                if k.startswith("_prompt_"):
-                    child_pipeline.graph.knob_values[k] = v
-                    child_pipeline.graph.knob_expandable[k] = (
-                        child_wf.knob_expandable.get(k, "")
-                    )
-            label = f"Gen {gen}.{len(candidates)+1}: {desc}"
-            prompt_detail: dict[str, str] = {}
-            if rec.operator.value == "prompt_mutate" and rec.target_node:
-                nid = rec.target_node
-                new_prompt = child_wf.knob_values.get(f"_prompt_{nid}", "")
-                old_node = build_pipeline(parent_cfg).graph.nodes.get(nid)
-                old_prompt = ""
-                if old_node and hasattr(old_node, "prompt_template"):
-                    old_prompt = old_node.prompt_template or ""
-                prompt_detail = {
-                    "node": nid, "before": old_prompt, "after": str(new_prompt),
-                }
-            mut_detail = {
-                "operator": rec.operator.value,
-                "node": rec.target_node or "",
-                **prompt_detail,
-            }
-            print(f"  {YELLOW}> {label} [random]{RESET}")
-            candidates.append((label, child_cfg, child_pipeline, mut_detail))
-
-        # Step 3: Evaluate all candidates in parallel
+        # Step 3: Evaluate candidates sequentially
         print(
             f"\n  {DIM}Evaluating {len(candidates)}"
             f" variants...{RESET}\n"
         )
 
-        async def eval_one(label, cfg, pipeline, mut_detail):
-            # Write mutation detail to log so UI tooltip works during play
-            if mut_detail.get("after"):
+        gen_candidates = []
+        inserted_labels: set[str] = set()
+        prev_best = best_score
+        gen_start = time.monotonic()
+        for label, cfg, pipeline, mut_detail in candidates:
+            if mut_detail.get("after") or mut_detail.get("node_prompts"):
                 mut_entry = {
                     "label": label + ":mut", "gen": gen,
                     "mutation": mut_detail, "type": "mutation_info",
@@ -521,35 +515,22 @@ async def main():
                 pipeline, cfg,
                 n_games=GAMES_PER_EVAL, eval_tag=label, gen=gen,
             )
-            return label, cfg, pipeline, result, mut_detail
-
-        gen_candidates = []
-        inserted_labels: set[str] = set()
-        prev_best = best_score
-        gen_start = time.monotonic()
-        tasks = [
-            asyncio.create_task(eval_one(*c))
-            for c in candidates
-        ]
-        for coro in asyncio.as_completed(tasks):
-            entry = await coro
-            label, cfg, pipeline, result, mut_detail = entry
             score = result.composite_score
-            ind = Population.make_individual(
-                pipeline.compile(), generation=gen, score=score,
+            new_entry = LeaderboardEntry(
+                id=f"g{gen}_{len(gen_candidates)}",
+                label=label, cfg=cfg, pipeline=pipeline,
+                score=score, gen=gen,
+                prompts=mut_detail.get("node_prompts", {}),
             )
-            inserted = archive.add(ind)
-            ind_configs[ind.id] = cfg
-            ind_labels[ind.id] = label
-            cycle_records[ind.id] = result.to_cycle_record(gen)
-            if mut_detail.get("after"):
-                ind_prompts[ind.id] = {
-                    mut_detail["node"]: mut_detail["after"],
-                }
+            # Insert into leaderboard if it qualifies
+            leaderboard.append(new_entry)
+            leaderboard.sort(key=lambda e: e.score, reverse=True)
+            inserted = new_entry in leaderboard[:LEADERBOARD_SIZE]
+            leaderboard = leaderboard[:LEADERBOARD_SIZE]
             gen_candidates.append((label, cfg, result, score))
             if inserted:
                 inserted_labels.add(label)
-            marker = f" {GREEN}-> archive{RESET}" if inserted else ""
+            marker = f" {GREEN}-> top {LEADERBOARD_SIZE}{RESET}" if inserted else ""
             print(
                 f"  {WHITE}{label}:{RESET} {result.win_rate}"
                 f" score={score:+.0f}"
@@ -564,20 +545,19 @@ async def main():
                 mutation_detail=mut_detail,
             )
 
-        new_score = archive.best().score if archive.best() else 0
+        new_score = leaderboard[0].score if leaderboard else 0
         score_trajectory.append(new_score)
         if new_score > prev_best:
             print(
-                f"\n  {GREEN}NEW BEST: score={new_score:+.0f}"
-                f" (archive: {archive.size} cells){RESET}"
+                f"\n  {GREEN}NEW BEST: score={new_score:+.0f}{RESET}"
             )
 
-        # Broadcast current archive population
+        # Broadcast leaderboard
         archive_entries = [
-            {"id": ind.id[:8], "score": ind.score, "gen": ind.generation,
-             "config": ind_configs.get(ind.id, seed_cfg).label,
-             "features": list(ind.features)}
-            for ind in archive.all_individuals()
+            {"id": e.id[:8], "score": e.score, "gen": e.gen,
+             "config": e.label.split(": ", 1)[-1] if ": " in e.label else e.label,
+             "features": []}
+            for e in leaderboard
         ]
         broadcast_archive(archive_entries)
         if reflection:
@@ -592,11 +572,11 @@ async def main():
         mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // (1024 * 1024)
         print(
             f"  {DIM}Gen {gen} in {time.monotonic() - gen_start:.0f}s"
-            f" | mem={mb}MB | archive={archive.size}{RESET}"
+            f" | mem={mb}MB | top={len(leaderboard)}{RESET}"
         )
 
     header("RESULTS")
-    best = archive.best()
-    print(f"\n  {GREEN}Winner:{RESET} score={best.score:+.0f}")
-    print(f"  {GREEN}Archive:{RESET} {archive.size} cells")
-    print(f"  {GREEN}Config:{RESET} {ind_configs[best.id].full_label}")
+    best = leaderboard[0] if leaderboard else None
+    if best:
+        print(f"\n  {GREEN}Winner:{RESET} score={best.score:+.0f}")
+        print(f"  {GREEN}Pipeline:{RESET} {best.label}")

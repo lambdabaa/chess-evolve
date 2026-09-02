@@ -15,13 +15,10 @@ from chess_evolve.broadcast import broadcast_game_state
 from chess_evolve.config import GAMES_PER_EVAL, MAX_MOVES, STOCKFISH_PATH, WORKSPACE
 from chess_evolve.display import DIM, RESET, WHITE, print
 from chess_evolve.engine import (
-    _board_user_msg,
-    _call_llm,
     get_pipeline_move,
     setup_workspace,
 )
 from chess_evolve.pipeline import PipelineConfig
-from chess_evolve.prompts import GAME_PLAN_PROMPT, OPPONENT_MODEL_PROMPT
 
 PIECE_MAP = {
     "R": "♖", "N": "♘", "B": "♗", "Q": "♕", "K": "♔", "P": "♙",
@@ -141,7 +138,7 @@ class EvalResult:
             won = result == "win"
             drew = result == "draw"
             if i == 0:
-                for role in ["tactician", "positionalist", "selector", "verifier"]:
+                for role in ["generator"]:
                     steps.append(AgentStep(
                         order=order, role=role, started_at="",
                         duration_s=0, cost_usd=None, output_tokens=None,
@@ -155,7 +152,7 @@ class EvalResult:
                 if blunder_details else "none"
             )
             agent_out = g.get("agent_outputs", {})
-            sel_list = agent_out.get("selector", [])
+            sel_list = agent_out.get("ranker", [])
             ver_list = agent_out.get("verifier", [])
             selector_out = " | ".join(
                 sel_list[-3:] if isinstance(sel_list, list) else [sel_list]
@@ -228,7 +225,6 @@ async def play_game(
     pipeline_runs = 0
     game_moves: list[str] = []
     eval_curve: list[int] = []
-    current_plan: str = ""
     all_node_outputs: dict[str, list[str]] = {}
     illegal_moves: list[str] = []
     pipeline_moves = 0
@@ -260,25 +256,12 @@ async def play_game(
                     print(f"      {DIM}[{game_tag}] {format_moves(game_moves)} (forced){RESET}")
                     continue
 
-                opponent_context = ""
-                if cfg.use_opponent_model:
-                    user_msg = _board_user_msg(board, game_moves, use_context=True)
-                    opponent_context = await _call_llm(
-                        OPPONENT_MODEL_PROMPT, user_msg, max_tokens=150,
-                    )
-
-                effective_cfg = cfg
-
                 extra_context = ""
-                if current_plan:
-                    extra_context += f"\nCurrent plan: {current_plan}"
-                if opponent_context:
-                    extra_context += f"\nOpponent threats: {opponent_context}"
 
                 try:
                     move_uci, nodes_executed, node_outputs = await asyncio.wait_for(
                         get_pipeline_move(
-                            pipeline, board, effective_cfg, workspace,
+                            pipeline, board, cfg, workspace,
                             game_tag=game_tag, llm_white=llm_plays_white,
                             stockfish_elo=cfg.opponent_elo, game_moves=game_moves,
                             move_count=move_count, gen=gen, config_label=cfg.label,
@@ -298,7 +281,7 @@ async def play_game(
                 )
                 import sys
                 raw_sel = (
-                    node_outputs.get("selector", "?")
+                    node_outputs.get("verifier", "?")
                     if node_outputs else "?"
                 )
                 # Extract UCI move from selector output
@@ -349,11 +332,6 @@ async def play_game(
                     full_config=cfg.full_label,
                 )
 
-                if cfg.use_game_plan:
-                    plan_input = _board_user_msg(board, game_moves, use_context=True)
-                    if current_plan:
-                        plan_input += f"\nPrevious plan: {current_plan}"
-                    current_plan = await _call_llm(GAME_PLAN_PROMPT, plan_input, max_tokens=60)
             else:
                 broadcast_game_state(
                     game_tag, board, game_moves, llm_plays_white,
